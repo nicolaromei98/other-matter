@@ -8,34 +8,6 @@ import type { Engine } from '../../core/Engine';
 import type { ScreenCircle } from '../../core/types';
 import type { Specimen } from '../../specimens/Specimen';
 
-/** Texel indices of an n×n grid (n a power of two) in Hilbert-curve order. */
-function hilbertOrder(n: number): Uint32Array {
-  const out = new Uint32Array(n * n);
-  for (let d = 0; d < n * n; d++) {
-    let t = d;
-    let x = 0;
-    let y = 0;
-    for (let s = 1; s < n; s *= 2) {
-      const rx = 1 & (t >> 1);
-      const ry = 1 & (t ^ rx);
-      if (ry === 0) {
-        if (rx === 1) {
-          x = s - 1 - x;
-          y = s - 1 - y;
-        }
-        const tmp = x;
-        x = y;
-        y = tmp;
-      }
-      x += s * rx;
-      y += s * ry;
-      t >>= 2;
-    }
-    out[d] = y * n + x;
-  }
-  return out;
-}
-
 const pow2Floor = (v: number) => Math.pow(2, Math.floor(Math.log2(Math.max(4, v))));
 /** C2-smooth 0→1 between a and b. */
 const smoother = (a: number, b: number, v: number) => {
@@ -51,20 +23,25 @@ export interface MorphOptions {
 const _clear = new THREE.Color();
 
 /**
- * Particle transition between two gallery specimens: dissolve, then condense.
+ * Particle transition between two gallery specimens: one cloud that turns
+ * from the first into the second.
  *
  * 1. Capture: both specimens are rendered in isolation through the main
  *    camera, cropped to the stage, so particles carry the real colours and
  *    silhouettes on screen.
- * 2. Sampling: the opaque texels of each capture, walked in Hilbert-curve
- *    order, are spread evenly over the particles (uniform coverage whatever
- *    the shape), with a sub-texel jitter.
- * 3. Animation (vertex shader, deterministic): the outgoing particles lift
- *    off in place and fade, region by region; the incoming ones settle into
- *    place and appear. Particles never travel across the stage.
- * 4. Hand-off: the live outgoing specimen fades into its own particles at the
- *    start; at the end the incoming particles tile the silhouette and the
- *    live specimen fades in over them on a long, C2-smooth curve.
+ * 2. Sampling: the opaque texels of each capture are ordered by angle (in
+ *    narrow wedges around the stage centre) and then by distance from it, and
+ *    spread evenly over the particles (uniform coverage whatever the shape),
+ *    with a sub-texel jitter. Each particle so gets a texel on both specimens
+ *    in the same direction from the centre: it only moves in or out a little,
+ *    and the cloud stays even all the way through.
+ * 3. Animation (vertex shader, deterministic): every particle starts in the
+ *    outgoing specimen, loosens into fine dust while it glides to its texel on
+ *    the incoming one and takes on its colour, then settles. Region by region,
+ *    in place on the stage.
+ * 4. Hand-off: the live outgoing specimen fades into the cloud at the start;
+ *    at the end the cloud tiles the incoming silhouette and the live specimen
+ *    fades in over it on a long, C2-smooth curve.
  *
  * Buffers, textures and programs are created once and reused.
  */
@@ -80,16 +57,22 @@ export class ParticleMorph {
   private corr?: THREE.DataTexture;
   private corrData?: Float32Array;
   private jitter?: Float32Array;
-  private hilbert?: Uint32Array;
+  /** Polar ordering scratch: key and texel per opaque texel, and the counting-sort buckets. */
+  private keys?: Uint32Array;
+  private texels?: Uint32Array;
+  private buckets?: Uint32Array;
+  private bins = 512;
+  private rings = 768;
+  /** Per wedge: where its texels start in each sorted list, and how many there are. */
+  private wedgeA?: { start: Uint32Array; count: Uint32Array };
+  private wedgeB?: { start: Uint32Array; count: Uint32Array };
   private bufA?: Uint8Array;
   private bufB?: Uint8Array;
   private listA?: Int32Array;
   private listB?: Int32Array;
   private geo?: THREE.BufferGeometry;
-  private pointsA?: THREE.Points;
-  private pointsB?: THREE.Points;
-  private matA?: THREE.ShaderMaterial;
-  private matB?: THREE.ShaderMaterial;
+  private points?: THREE.Points;
+  private mat?: THREE.ShaderMaterial;
 
   private readonly shared = {
     tCorr: { value: null as THREE.Texture | null },
@@ -99,9 +82,9 @@ export class ParticleMorph {
     uSpread: { value: 0.26 },
     uLift: { value: 0.07 },
     uSwirl: { value: 0.3 },
-    uDust: { value: 0.45 },
+    uDust: { value: 0.72 },
     uDepth: { value: 14 },
-    uStagger: { value: 0.18 },
+    uStagger: { value: 0.14 },
     uOpacity: { value: 1 },
   };
 
@@ -153,7 +136,14 @@ export class ParticleMorph {
     this.bufB = new Uint8Array(C * C * 4);
     this.listA = new Int32Array(C * C);
     this.listB = new Int32Array(C * C);
-    this.hilbert = hilbertOrder(C);
+    this.bins = C;
+    this.rings = Math.ceil(C * 1.5);
+    this.keys = new Uint32Array(C * C);
+    this.texels = new Uint32Array(C * C);
+    this.buckets = new Uint32Array(this.bins * this.rings);
+    const wedge = () => ({ start: new Uint32Array(this.bins), count: new Uint32Array(this.bins) });
+    this.wedgeA = wedge();
+    this.wedgeB = wedge();
 
     this.corrData = new Float32Array(N * 4);
     this.corr = new THREE.DataTexture(this.corrData, side, side, THREE.RGBAFormat, THREE.FloatType);
@@ -171,32 +161,34 @@ export class ParticleMorph {
     this.geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 3), 3));
     this.geo.setAttribute('aRef', new THREE.BufferAttribute(ref, 2));
 
-    const make = (role: number, tex: THREE.Texture, order: number) => {
-      const mat = new THREE.ShaderMaterial({
-        uniforms: { ...this.shared, tCol: { value: tex }, uRole: { value: role }, uSize: { value: 2 } },
-        vertexShader: `${noise}\n${pointsVert}`,
-        fragmentShader: pointsFrag,
-        transparent: true,
-        depthTest: false,
-        depthWrite: false,
-      });
-      const pts = new THREE.Points(this.geo, mat);
-      pts.frustumCulled = false;
-      pts.renderOrder = order;
-      pts.visible = false;
-      this.engine.scene.add(pts);
-      return [pts, mat] as const;
-    };
-    [this.pointsA, this.matA] = make(0, this.rtA.texture, -2);
-    [this.pointsB, this.matB] = make(1, this.rtB.texture, -1);
+    this.mat = new THREE.ShaderMaterial({
+      uniforms: {
+        ...this.shared,
+        tColA: { value: this.rtA.texture },
+        tColB: { value: this.rtB.texture },
+        uSizeA: { value: 2 },
+        uSizeB: { value: 2 },
+      },
+      vertexShader: `${noise}\n${pointsVert}`,
+      fragmentShader: pointsFrag,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+    });
+    this.points = new THREE.Points(this.geo, this.mat);
+    this.points.frustumCulled = false;
+    this.points.renderOrder = -1;
+    this.points.visible = false;
+    this.engine.scene.add(this.points);
     return true;
   }
 
   // ── Public ─────────────────────────────────────────────────────────────
 
   /**
-   * Dissolve `a` (on the stage now) and condense `b` (already placed on the
-   * stage by the layout, at opacity 0). Resolves when `b` is fully live.
+   * Turn `a` (on the stage now) into `b` (already placed on the stage by the
+   * layout, at opacity 0) through one particle cloud. Resolves when `b` is
+   * fully live.
    */
   run(a: Specimen, b: Specimen, opts: MorphOptions): Promise<void> {
     this.cancel();
@@ -226,15 +218,13 @@ export class ParticleMorph {
     this.rtB?.dispose();
     this.corr?.dispose();
     this.geo?.dispose();
-    this.matA?.dispose();
-    this.matB?.dispose();
+    this.mat?.dispose();
   }
 
   // ── Internals ──────────────────────────────────────────────────────────
 
   private showPoints(on: boolean): void {
-    this.pointsA!.visible = on;
-    this.pointsB!.visible = on;
+    this.points!.visible = on;
   }
 
   private finish(): void {
@@ -281,33 +271,87 @@ export class ParticleMorph {
     restore();
   }
 
-  /** Opaque texels in Hilbert order. */
-  private list(buf: Uint8Array, out: Int32Array): number {
-    const h = this.hilbert!;
+  /** Opaque texels ordered by angle (one wedge per bin), then by distance from the centre. Counting sort. */
+  private list(buf: Uint8Array, out: Int32Array, wedge: { start: Uint32Array; count: Uint32Array }): number {
+    const C = this.capSize;
+    const half = C / 2;
+    const keys = this.keys!;
+    const texels = this.texels!;
+    const buckets = this.buckets!;
+    const { bins, rings } = this;
+    buckets.fill(0);
+    wedge.count.fill(0);
     let n = 0;
-    for (let k = 0; k < h.length; k++) {
-      const idx = h[k];
-      if (buf[idx * 4 + 3] > 40) out[n++] = idx;
+    for (let idx = 0; idx < C * C; idx++) {
+      if (buf[idx * 4 + 3] <= 40) continue;
+      const x = (idx % C) + 0.5 - half;
+      const y = Math.floor(idx / C) + 0.5 - half;
+      const bin = Math.min(bins - 1, Math.floor(((Math.atan2(y, x) + Math.PI) / (2 * Math.PI)) * bins));
+      const ring = Math.min(rings - 1, Math.floor(Math.hypot(x, y) * 2));
+      const key = bin * rings + ring;
+      keys[n] = key;
+      texels[n] = idx;
+      buckets[key]++;
+      wedge.count[bin]++;
+      n++;
     }
+    for (let w = 0, at = 0; w < bins; w++) {
+      wedge.start[w] = at;
+      at += wedge.count[w];
+    }
+    let sum = 0;
+    for (let k = 0; k < buckets.length; k++) {
+      const c = buckets[k];
+      buckets[k] = sum;
+      sum += c;
+    }
+    for (let i = 0; i < n; i++) out[buckets[keys[i]]++] = texels[i];
     return n;
   }
 
-  /** Spread each silhouette's texels evenly over the particles (rank along the curve). */
+  /**
+   * Pair the two silhouettes wedge by wedge. Each wedge gets a share of the
+   * particles in proportion to both shapes there; inside it, a particle keeps
+   * its relative distance from the centre (near the centre in one specimen,
+   * near the centre in the other), so the cloud stays filled while it changes.
+   */
   private distribute(nA: number, nB: number): void {
     const d = this.corrData!;
     const jit = this.jitter!;
     const la = this.listA!;
     const lb = this.listB!;
+    const wa = this.wedgeA!;
+    const wb = this.wedgeB!;
     const C = this.capSize;
     const N = this.count;
-    for (let i = 0; i < N; i++) {
-      const a = la[Math.min(nA - 1, Math.floor(((i + 0.5) * nA) / N))];
-      const b = lb[Math.min(nB - 1, Math.floor(((i + 0.5) * nB) / N))];
-      const j = i * 4;
-      d[j] = ((a % C) + jit[j]) / C;
-      d[j + 1] = (Math.floor(a / C) + jit[j + 1]) / C;
-      d[j + 2] = ((b % C) + jit[j + 2]) / C;
-      d[j + 3] = (Math.floor(b / C) + jit[j + 3]) / C;
+    const bins = this.bins;
+    // a wedge one shape leaves empty borrows the nearest wedge that shape fills
+    const nearest = (count: Uint32Array, w: number) => {
+      for (let s = 0; s < bins; s++) {
+        if (count[(w + s) % bins]) return (w + s) % bins;
+        if (count[(w - s + bins) % bins]) return (w - s + bins) % bins;
+      }
+      return w;
+    };
+    let cum = 0;
+    let i = 0;
+    for (let w = 0; w < bins; w++) {
+      cum += (wa.count[w] / nA + wb.count[w] / nB) / 2;
+      const end = w === bins - 1 ? N : Math.min(N, Math.round(cum * N));
+      const n = end - i;
+      if (n <= 0) continue;
+      const ka = wa.count[w] ? w : nearest(wa.count, w);
+      const kb = wb.count[w] ? w : nearest(wb.count, w);
+      for (let q = 0; q < n; q++, i++) {
+        const f = (q + 0.5) / n;
+        const a = la[wa.start[ka] + Math.min(wa.count[ka] - 1, Math.floor(f * wa.count[ka]))];
+        const b = lb[wb.start[kb] + Math.min(wb.count[kb] - 1, Math.floor(f * wb.count[kb]))];
+        const j = i * 4;
+        d[j] = ((a % C) + jit[j]) / C;
+        d[j + 1] = (Math.floor(a / C) + jit[j + 1]) / C;
+        d[j + 2] = ((b % C) + jit[j + 2]) / C;
+        d[j + 3] = (Math.floor(b / C) + jit[j + 3]) / C;
+      }
     }
     this.corr!.needsUpdate = true;
   }
@@ -329,8 +373,8 @@ export class ParticleMorph {
     }
     if (token !== this.token || !this.running) return;
 
-    let nA = this.list(this.bufA!, this.listA!);
-    const nB = this.list(this.bufB!, this.listB!);
+    let nA = this.list(this.bufA!, this.listA!, this.wedgeA!);
+    const nB = this.list(this.bufB!, this.listB!, this.wedgeB!);
     if (nB === 0) {
       // destination not renderable: hand over without particles
       this.finish();
@@ -338,6 +382,8 @@ export class ParticleMorph {
     }
     if (nA === 0) {
       this.listA!.set(this.listB!.subarray(0, nB));
+      this.wedgeA!.start.set(this.wedgeB!.start);
+      this.wedgeA!.count.set(this.wedgeB!.count);
       nA = nB;
     }
     this.distribute(nA, nB);
@@ -389,7 +435,7 @@ export class ParticleMorph {
     const p = this.state.p;
     this.shared.uP.value = p;
 
-    // live hand-off: A dissolves into its particles, B fades in over its own
+    // live hand-off: A fades into the cloud, B fades in over it once it has settled
     const [h0, h1] = this.config.handoff;
     this.a!.opacity = 1 - smoother(0.02, 0.38, p);
     this.b!.opacity = smoother(h0, h1, p);
@@ -400,9 +446,8 @@ export class ParticleMorph {
     // particle size that tiles each silhouette: sqrt(area / count), in device px
     const side = c.half * 2;
     const tile = (cover: number) => Math.sqrt((cover * side * side) / this.count) * this.config.particleSize * e.pixelRatio;
-    this.matA!.uniforms.uSize.value = tile(this.coverA);
-    this.matB!.uniforms.uSize.value = tile(this.coverB);
-    e.screenToWorld(st.x, st.y, 0, this.pointsA!.position);
-    this.pointsB!.position.copy(this.pointsA!.position);
+    this.mat!.uniforms.uSizeA.value = tile(this.coverA);
+    this.mat!.uniforms.uSizeB.value = tile(this.coverB);
+    e.screenToWorld(st.x, st.y, 0, this.points!.position);
   };
 }

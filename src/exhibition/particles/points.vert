@@ -1,25 +1,28 @@
-// ── particle transition: dissolve / condense ──────────────────────────
-// Two point sets share this shader: role 0 is the outgoing specimen (it comes
-// apart into dust that spreads out softly around it), role 1 the incoming one
-// (the same motion backwards: dust gathers into it). Each particle samples its
-// colour from the real capture of its specimen; regions start at different
-// moments (noise). As a particle disperses it drifts a short way outward with a
-// slight swirl and lift, becomes finer and fades on its own schedule, so the
-// specimen thins into a light veil of dust instead of bursting.
+// ── particle transition: one cloud, two specimens ─────────────────────
+// A single set of particles carries the change. Each particle has a texel on
+// the outgoing specimen and one on the incoming one (matched along a Hilbert
+// curve, so neighbours stay neighbours). It starts as part of the outgoing
+// specimen, with its colour; mid-way it loosens into fine dust (a short drift
+// with a slight swirl and lift, smaller and a little fainter) while it glides
+// to its texel on the incoming specimen and takes on that colour; then it
+// settles into place on a long ease-out, slowing down instead of stopping.
+// Regions move at different moments (noise), so the change ripples through the
+// form instead of happening all at once.
 
 attribute vec2 aRef;
 
 uniform sampler2D tCorr;      // xy: outgoing texel, zw: incoming texel
-uniform sampler2D tCol;       // capture of this role's specimen (premultiplied)
-uniform float uRole;
+uniform sampler2D tColA;      // capture of the outgoing specimen (premultiplied)
+uniform sampler2D tColB;      // capture of the incoming specimen (premultiplied)
 uniform float uP;
 uniform float uStageR;
 uniform float uCamDist;
-uniform float uSize;          // px (device) that tiles the silhouette
+uniform float uSizeA;         // px (device) that tiles each silhouette
+uniform float uSizeB;
 uniform float uSpread;        // fraction of the radius
 uniform float uLift;          // fraction of the radius
 uniform float uSwirl;         // radians
-uniform float uDust;          // size once dispersed, relative to the resting size
+uniform float uDust;          // size while loosened, relative to the resting size
 uniform float uDepth;
 uniform float uStagger;
 
@@ -41,48 +44,60 @@ vec3 stagePos(vec2 uv) {
   return vec3(p, z);
 }
 
+// Soft start, long slow arrival: zero velocity at both ends, most of the
+// deceleration spread over the second half.
+float settle(float t) {
+  t = clamp(t, 0.0, 1.0);
+  float s = 1.0 - pow(t, 1.6);
+  return 1.0 - s * s * s;
+}
+
+vec4 colourAt(sampler2D t, vec2 uv) {
+  vec4 c = texture2D(t, uv);
+  c.rgb /= max(c.a, 0.001);
+  return c;
+}
+
 void main() {
   vec4 corr = texture2D(tCorr, aRef);
-  vec2 uv = uRole < 0.5 ? corr.xy : corr.zw;
-  vec4 c = texture2D(tCol, uv);
-  c.rgb /= max(c.a, 0.001);
-  vec3 base = stagePos(uv);
+  vec4 ca = colourAt(tColA, corr.xy);
+  vec4 cb = colourAt(tColB, corr.zw);
+  vec3 pa = stagePos(corr.xy);
+  vec3 pb = stagePos(corr.zw);
 
-  vec4 rnd = hash4(aRef * 512.0 + uRole * 17.0);
-  vec4 rnd2 = hash4(aRef * 731.0 + 5.3 + uRole * 11.0);
-  float n = snoise(vec3(base.xy / uStageR * 1.8, uRole * 3.1)) * 0.5 + 0.5;
+  vec4 rnd = hash4(aRef * 512.0);
+  vec4 rnd2 = hash4(aRef * 731.0 + 5.3);
+  float n = snoise(vec3(pa.xy / uStageR * 1.8, 0.0)) * 0.5 + 0.5;
   float o = uStagger * (0.75 * n + 0.25 * rnd.x);
 
-  // k: 0 = part of the specimen, 1 = dispersed into air
-  // the two sets overlap, so there is never an empty stage
-  float k = uRole < 0.5
-    ? smoothstep(0.02 + o, 0.58 + o, uP)
-    : 1.0 - smoothstep(0.2 + o, 0.68 + o, uP);
+  // m: 0 = outgoing shape and colour, 1 = incoming
+  // k: how loose the particle is, 0 in either specimen, highest mid-way
+  float m = settle((uP - 0.04 - o) / 0.82);
+  float k = smoothstep(0.0 + o, 0.32 + o, uP) * (1.0 - settle((uP - 0.3 - o) / 0.66));
 
-  // outward from the centre, turned by a slight swirl; most stay near, some drift a little further
+  vec3 base = mix(pa, pb, m);
+
+  // loosening: outward from the centre, turned by a slight swirl; most stay near
   vec2 radial = base.xy / uStageR;
   float rl = length(radial);
   vec2 dir = rl > 1e-3 ? radial / rl : normalize(rnd2.xy - 0.5 + 1e-3);
   float ang = (rnd2.z - 0.5) * 0.9 + (n - 0.5) * 2.0 * uSwirl;
-  float ca = cos(ang);
-  float sa = sin(ang);
-  dir = vec2(ca * dir.x - sa * dir.y, sa * dir.x + ca * dir.y);
-  float far = rnd.z * rnd.z;
-  float reach = uSpread * uStageR * (0.15 + 0.85 * far) * (0.6 + 0.4 * rl);
+  float cs = cos(ang);
+  float sn = sin(ang);
+  dir = vec2(cs * dir.x - sn * dir.y, sn * dir.x + cs * dir.y);
+  float reach = uSpread * uStageR * (0.15 + 0.85 * rnd.z * rnd.z) * (0.6 + 0.4 * rl);
   vec3 drift = vec3(dir * reach, (rnd.w - 0.3) * uDepth);
   drift.y += uLift * uStageR * (0.4 + rnd2.w);
-  // a faint meander while airborne
   drift.xy += vec2(sin(uP * 4.0 + rnd2.x * 6.283), cos(uP * 3.0 + rnd2.y * 6.283)) * uStageR * 0.012;
   vec3 pos = base + drift * k;
 
   vec4 mv = modelViewMatrix * vec4(pos, 1.0);
-  float size = uSize * mix(1.0, uDust, k) * (0.8 + 0.4 * rnd.w);
+  float size = mix(uSizeA, uSizeB, m) * mix(1.0, uDust, k) * (0.8 + 0.4 * rnd.w);
   gl_PointSize = max(0.5, size * uCamDist / max(-mv.z, 1.0));
 
-  // thin out gradually, each particle on its own schedule
-  float life = mix(0.5, 1.0, rnd.y);
-  float fade = 1.0 - smoothstep(life * 0.25, life, k);
-  vColor = vec4(c.rgb, c.a * fade * (1.0 - 0.3 * k));
+  // the cloud thins a little while loose, but every particle stays: one continuous change
+  vec4 col = mix(ca, cb, m);
+  vColor = vec4(col.rgb, col.a * (1.0 - k * (0.1 + 0.25 * rnd.y)));
   vK = k;
   gl_Position = projectionMatrix * mv;
 }
