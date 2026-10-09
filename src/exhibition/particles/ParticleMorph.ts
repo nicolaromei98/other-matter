@@ -84,7 +84,7 @@ export class ParticleMorph {
     uSwirl: { value: 0.3 },
     uDust: { value: 0.72 },
     uDepth: { value: 14 },
-    uStagger: { value: 0.14 },
+    uStagger: { value: 0.12 },
     uOpacity: { value: 1 },
   };
 

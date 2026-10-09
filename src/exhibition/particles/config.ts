@@ -26,11 +26,11 @@ export const galleryParticleConfig = {
   /** px: depth drift. 0–60. */
   depth: 14,
   /** 0–0.15: how much regions are offset in time (noise-driven). */
-  stagger: 0.14,
-  /** Total length, s. */
-  duration: 2.3,
+  stagger: 0.12,
+  /** Total length, s. The curves are fractions of it, so shorter keeps the same shape. */
+  duration: 1.5,
   /** Timeline window in which the live incoming specimen fades in while the cloud slows to rest. */
-  handoff: [0.66, 1] as [number, number],
+  handoff: [0.62, 1] as [number, number],
   /** Quarter the particle count and capture size on low-tier devices. */
   adaptiveQuality: true,
 };
