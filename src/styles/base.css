@@ -36,6 +36,13 @@
 html {
   background: var(--bg);
   -webkit-text-size-adjust: 100%;
+  /* no visible scrollbar; the page still scrolls (wheel, touch, keys, Lenis) */
+  scrollbar-width: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
 }
 
 html.lenis,
