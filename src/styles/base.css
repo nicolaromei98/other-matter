@@ -167,13 +167,37 @@ button {
   gap: max(10px, calc(14 * var(--u)));
 }
 
-/* "VIEW — GRID": states the current view; greys out while previewing the other one */
+/* "VIEW — GRID": states the current view and, greyed, previews the other one on hover.
+   Only the word changes: the two words share one cell and cross-fade with a small rise;
+   CSS transitions, so an interrupted hover eases back instead of jumping. */
 .om-view {
-  transition: color 0.35s var(--ease-out);
+  display: inline-flex;
+  align-items: baseline;
+  white-space: nowrap;
+  transition: color 0.5s var(--ease-out);
 }
 
 .om-view.is-preview {
   color: #9a9a9a;
+}
+
+.om-view-v {
+  display: inline-grid;
+}
+
+.om-view-v > span {
+  grid-area: 1 / 1;
+  opacity: 0;
+  transform: translateY(0.45em);
+  transition:
+    opacity 0.45s var(--ease-out),
+    transform 0.6s var(--ease-out);
+}
+
+.om-view[data-show='grid'] [data-v='grid'],
+.om-view[data-show='gallery'] [data-v='gallery'] {
+  opacity: 1;
+  transform: none;
 }
 
 .sw-track {
@@ -705,6 +729,8 @@ button {
 
 @media (prefers-reduced-motion: reduce) {
   .sw,
+  .om-view,
+  .om-view-v > span,
   .loader,
   .loader-bar i {
     transition-duration: 0.01ms !important;
