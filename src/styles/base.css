@@ -1,0 +1,652 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   OTHER MATTER — interface
+   Values come from the supplied Gallery/Grid designs, drawn on a 1920 px
+   artboard: every design pixel is `var(--u)` here, so the composition
+   scales with the viewport. The very small labels (6.4–9.7 px on the
+   artboard) get px floors so they stay legible below 1920 px.
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --u: calc(100vw / 1920);
+  --bg: #ffffff;
+  --card: #f2f2f2;
+  --ink: #000000;
+  --rule: #e4e4e4;
+  --yellow: #f7d55c;
+
+  --manrope: 'Manrope Variable', 'Manrope', Helvetica, Arial, sans-serif;
+  --cygre: 'Cygre', Helvetica, Arial, sans-serif;
+  --mono: 'Akkurat Mono', 'Cygre', ui-monospace, Menlo, monospace;
+
+  --pad: max(16px, calc(32 * var(--u)));
+  --stage: calc(555 * var(--u));
+  --gallery-h: 70vh;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  color-scheme: light;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--bg);
+  -webkit-text-size-adjust: 100%;
+}
+
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--manrope);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+h1,
+p {
+  margin: 0;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 1px solid var(--ink);
+  outline-offset: 3px;
+}
+
+::selection {
+  background: var(--yellow);
+}
+
+/* Line masks for text reveals (GSAP moves the inner span). */
+.ln {
+  display: block;
+  overflow: hidden;
+  padding-bottom: 0.14em;
+  margin-bottom: -0.14em;
+}
+
+.ln > span {
+  display: inline-block;
+  will-change: transform;
+}
+
+/* ── Canvas overlay ──────────────────────────────────────────────────── */
+
+.gl {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  display: block;
+}
+
+.is-over-specimen,
+.is-over-specimen * {
+  cursor: grab !important;
+}
+
+.is-over-specimen:active,
+.is-over-specimen:active * {
+  cursor: grabbing !important;
+}
+
+/* ── Frame (design: .slide) ──────────────────────────────────────────── */
+
+.om {
+  position: relative;
+  padding: var(--pad);
+  background: var(--bg);
+}
+
+.om-head {
+  display: flex;
+  flex-direction: column;
+  gap: calc(23 * var(--u));
+}
+
+.om-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.om-title {
+  font-family: var(--manrope);
+  font-weight: 400;
+  font-size: max(20px, calc(25.4 * var(--u)));
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.om-head > .om-row:first-child {
+  position: relative;
+}
+
+/* Centred on the page (the head row spans the page between equal side paddings). */
+.om-logo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(28px, calc(34 * var(--u)));
+  height: max(28px, calc(34 * var(--u)));
+  transform: translate(-50%, -50%);
+}
+
+.om-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(10 * var(--u));
+}
+
+.om-switch .om-label {
+  margin-right: max(2px, calc(2 * var(--u)));
+}
+
+.sw {
+  width: max(28px, calc(34 * var(--u)));
+  height: max(28px, calc(34 * var(--u)));
+  border-radius: max(4px, calc(5 * var(--u)));
+  display: grid;
+  place-items: center;
+  background: var(--yellow);
+  color: var(--ink);
+  transition:
+    background-color 0.6s var(--ease-out),
+    color 0.6s var(--ease-out);
+}
+
+.sw + .sw {
+  margin-left: calc(-6 * var(--u));
+}
+
+.sw[aria-pressed='true'] {
+  background: var(--ink);
+  color: #fff;
+}
+
+.sw svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 4.6;
+  stroke-linecap: round;
+}
+
+.om-rulebox {
+  display: flex;
+  flex-direction: column;
+  gap: calc(14 * var(--u));
+}
+
+.om-rule {
+  display: block;
+  height: 1px;
+  background: var(--rule);
+  transform-origin: left center;
+}
+
+.om-label {
+  font-family: var(--mono);
+  font-weight: 400;
+  font-size: max(9px, calc(6.4 * var(--u)));
+  line-height: 1;
+  letter-spacing: 0;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.om-sub-right {
+  gap: max(16px, calc(24 * var(--u)));
+}
+
+.om-sound {
+  opacity: 0.45;
+  transition: opacity 0.3s;
+}
+
+.om-sound:hover,
+.om-sound[aria-pressed='true'] {
+  opacity: 1;
+}
+
+/* ── Stage area: gallery (absolute) + grid (in flow) ─────────────────── */
+
+.om-stage {
+  position: relative;
+  margin-top: calc(72 * var(--u));
+}
+
+.om[data-mode='gallery']:not(.is-transitioning) .om-stage {
+  height: var(--gallery-h);
+}
+
+/* Gallery (design: Slide 16:9 — 2) */
+
+.gallery {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: var(--gallery-h);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--stage) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  z-index: 2;
+}
+
+.om[data-mode='grid']:not(.is-transitioning) .gallery {
+  visibility: hidden;
+}
+
+.om[data-mode='grid'] .gallery {
+  pointer-events: none;
+}
+
+.g-name {
+  grid-area: 1 / 1;
+  align-self: center;
+  justify-self: start;
+}
+
+.g-title {
+  font-family: var(--cygre);
+  font-weight: 400;
+  font-size: max(15px, calc(19.4 * var(--u)));
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.g-title b {
+  font-weight: 700;
+}
+
+.g-stage {
+  grid-area: 1 / 2;
+  align-self: center;
+  width: var(--stage);
+  aspect-ratio: 1;
+  border-radius: 50%;
+}
+
+.g-desc {
+  grid-area: 1 / 3;
+  align-self: center;
+  justify-self: start;
+  margin-left: max(16px, calc(27.19vw - var(--stage) / 2));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: max(12px, calc(16 * var(--u)));
+}
+
+.g-short {
+  font-family: var(--manrope);
+  font-size: max(14px, calc(15.6 * var(--u)));
+  line-height: 1;
+}
+
+.g-scan {
+  opacity: 0.4;
+  transition: opacity 0.3s;
+}
+
+.g-scan:hover,
+.g-scan:focus-visible {
+  opacity: 1;
+}
+
+.g-nav {
+  grid-area: 2 / 1 / 3 / 4;
+  justify-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* liquid slider: everything derives from the active bead's diameter */
+  --bead-a: max(42px, calc(51 * var(--u)));
+  gap: calc(var(--bead-a) * 0.3);
+  padding: calc(52 * var(--u)) 0 calc(44 * var(--u));
+}
+
+/* The row's box at rest (LiquidNav reflows the beads inside it). */
+.g-pill {
+  position: relative;
+  width: calc(var(--bead-a) * 6.64);
+  height: var(--bead-a);
+}
+
+.g-dots {
+  position: absolute;
+  inset: 0;
+}
+
+/* Hit areas: the beads and the droplet are drawn by WebGL; LiquidNav moves these over them. */
+.g-dot,
+.g-next,
+.g-prev {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 50%;
+  will-change: transform;
+}
+
+.g-dot {
+  width: var(--bead-a);
+  height: var(--bead-a);
+  margin: calc(var(--bead-a) * -0.5) 0 0 calc(var(--bead-a) * -0.5);
+}
+
+.g-next,
+.g-prev {
+  --d: calc(var(--bead-a) * 0.547);
+  width: var(--d);
+  height: var(--d);
+  margin: calc(var(--d) * -0.5) 0 0 calc(var(--d) * -0.5);
+}
+
+.g-dot:focus-visible,
+.g-next:focus-visible,
+.g-prev:focus-visible {
+  outline-offset: 3px;
+}
+
+/* Grid (design: frame-4 … frame-12) */
+
+.grid {
+  display: none;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(10 * var(--u));
+}
+
+.om[data-mode='grid'] .grid,
+.om.is-transitioning .grid {
+  display: grid;
+}
+
+.card {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(61 * var(--u));
+  padding: calc(20 * var(--u));
+  cursor: pointer;
+  outline-offset: -1px;
+  touch-action: pan-y;
+}
+
+.card-bg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--card);
+}
+
+.card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  align-self: stretch;
+}
+
+.card-idblock {
+  display: flex;
+  flex-direction: column;
+  gap: calc(11 * var(--u));
+  width: max(150px, calc(126 * var(--u)));
+}
+
+.card-id {
+  font-family: var(--mono);
+  font-size: max(9.5px, calc(7 * var(--u)));
+  line-height: 1;
+}
+
+.card-name {
+  font-family: var(--cygre);
+  font-weight: 400;
+  font-size: max(11px, calc(9.7 * var(--u)));
+  line-height: 1;
+}
+
+.card-name b {
+  font-weight: 700;
+}
+
+.card-ellipse {
+  width: calc(356.27 * var(--u));
+  aspect-ratio: 1;
+  border-radius: 50%;
+}
+
+.card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  align-self: stretch;
+}
+
+.card-desc {
+  font-family: var(--manrope);
+  font-size: max(13px, calc(15.6 * var(--u)));
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.card-brand {
+  font-family: var(--cygre);
+  font-size: max(11px, calc(9.7 * var(--u)));
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* ── Loader ──────────────────────────────────────────────────────────── */
+
+.loader {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--bg);
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 14px;
+  transition: opacity 0.9s var(--ease-out);
+}
+
+.loader > * {
+  transition: opacity 0.5s var(--ease-out);
+}
+
+/* the label shows once its font is in, so it never flashes in a fallback face */
+.loader.is-ready > * {
+  opacity: 1;
+}
+
+.loader.is-done {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.loader-bar {
+  position: relative;
+  width: 160px;
+  height: 1px;
+  background: var(--rule);
+  overflow: hidden;
+}
+
+.loader-bar i {
+  position: absolute;
+  inset: 0;
+  background: var(--ink);
+  transform-origin: left;
+  transform: scaleX(0);
+  transition: transform 0.5s var(--ease-out);
+}
+
+/* ── Diagnostics HUD (dev / ?debug) ──────────────────────────────────── */
+
+.hud {
+  position: fixed;
+  left: 8px;
+  bottom: 8px;
+  z-index: 200;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.82);
+  color: #fff;
+  font: 10px/1.5 var(--mono);
+  white-space: pre;
+  pointer-events: none;
+}
+
+/* ── No-WebGL fallback: static specimen plates ───────────────────────── */
+
+.no-webgl .g-stage,
+.no-webgl .card-ellipse,
+.no-webgl .g-dot {
+  background: radial-gradient(circle at 40% 35%, var(--fb1, #f4f4f4), var(--fb2, #d9d9d9));
+}
+
+.no-webgl .g-dot {
+  border: calc(var(--bead-a) * 0.065) solid #080808;
+}
+
+.no-webgl .g-next,
+.no-webgl .g-prev {
+  display: grid;
+  place-items: center;
+  background: #080808;
+  color: #ffffff;
+}
+
+.no-webgl .g-next::after,
+.no-webgl .g-prev::after {
+  content: '→';
+  font-size: calc(var(--bead-a) * 0.28);
+}
+
+.no-webgl .g-prev::after {
+  content: '←';
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────── */
+
+@media (max-width: 760px) {
+  :root {
+    --u: calc(100vw / 640);
+    --pad: 16px;
+  }
+
+  .om-title {
+    font-size: 20px;
+  }
+
+  /* the title fills the row on phones: the logo takes its own line above it */
+  .om-head > .om-row:first-child {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 14px;
+  }
+
+  .om-logo {
+    position: static;
+    grid-column: 1 / -1;
+    order: -1;
+    justify-self: center;
+    transform: none;
+  }
+
+  .om-switch .om-label,
+  .om-sub-right > .om-label:last-child {
+    display: none;
+  }
+
+  .sw {
+    width: 40px;
+    height: 40px;
+  }
+
+  .gallery {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .g-name {
+    grid-area: 1 / 1;
+    justify-self: center;
+    padding-top: 8px;
+  }
+
+  .g-stage {
+    grid-area: 2 / 1;
+    width: min(78vw, var(--stage));
+  }
+
+  .g-desc {
+    grid-area: 3 / 1;
+    justify-self: center;
+    align-items: center;
+    margin-left: 0;
+  }
+
+  .g-nav {
+    grid-area: 4 / 1;
+    padding: 18px 0 4px;
+  }
+
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .card {
+    gap: 28px;
+    padding: 16px;
+  }
+
+  .card-ellipse {
+    width: min(72vw, 300px);
+  }
+
+  .card-desc {
+    white-space: normal;
+    max-width: 60%;
+    line-height: 1.15;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sw,
+  .loader,
+  .loader-bar i {
+    transition-duration: 0.01ms !important;
+  }
+}
