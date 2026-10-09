@@ -7,6 +7,7 @@ import type { Specimen } from '../specimens/Specimen';
 import { easeMove, lerp } from '../core/math';
 import { Transmutation } from './transmute/Transmutation';
 import { GooeySlider } from './GooeySlider';
+import { ViewSwitch } from '../ui/ViewSwitch';
 import { LiquidNav } from './LiquidNav';
 
 type Mode = 'gallery' | 'grid';
@@ -73,7 +74,7 @@ export class Exhibition {
   private readonly dotEls: HTMLButtonElement[] = [];
   private readonly cardEls: HTMLElement[] = [];
   private readonly ellipseEls: HTMLElement[] = [];
-  private readonly switchEls: HTMLButtonElement[];
+  private readonly viewSwitch: ViewSwitch;
 
   private readonly anchors: ScreenCircle[] = MATERIALS.map(() => ({ x: 0, y: 0, r: 0, z: 0 }));
   private readonly tracks: Track[] = MATERIALS.map(() => ({ from: { x: 0, y: 0, r: 0, z: 0 }, t: 1, lift: 0, arc: 0, logScale: true, to: null }));
@@ -110,7 +111,6 @@ export class Exhibition {
     this.shortEl = qs('.g-short', root);
     this.navEl = qs('.g-nav', root);
     this.pillEl = qs('.g-pill', root);
-    this.switchEls = qsa<HTMLButtonElement>('.sw', root);
 
     const params = new URLSearchParams(location.search);
     const fromUrl = MATERIALS.findIndex((m) => m.slug === params.get('specimen'));
@@ -121,7 +121,12 @@ export class Exhibition {
     this.build();
     this.bind();
     this.root.dataset.mode = this.mode;
-    this.syncSwitch();
+    this.viewSwitch = new ViewSwitch(
+      qs('.om-switch', root),
+      this.mode,
+      (mode) => (mode === 'grid' ? this.toGrid() : this.toGallery()),
+      !!engine?.reducedMotion,
+    );
     this.syncDots();
     this.setGalleryText(this.selected);
     this.applyInteractivity();
@@ -196,9 +201,6 @@ export class Exhibition {
   }
 
   private bind(): void {
-    this.switchEls.forEach((b) =>
-      b.addEventListener('click', () => (b.dataset.mode === 'grid' ? this.toGrid() : this.toGallery())),
-    );
     qs('.g-scan', this.root).addEventListener('click', () => this.scan(this.selected));
     qs('.g-next', this.root).addEventListener('click', () => this.step(1));
     qs('.g-prev', this.root).addEventListener('click', () => this.step(-1));
@@ -221,6 +223,10 @@ export class Exhibition {
         this.step(e.key === 'ArrowRight' ? 1 : -1);
       } else if (e.key === 's' || e.key === 'S') {
         if (this.mode === 'gallery') this.scan(this.selected);
+      } else if (e.key === 'v' || e.key === 'V') {
+        // V toggles the view
+        if (this.mode === 'grid') this.toGallery();
+        else this.toGrid();
       }
     });
 
@@ -248,7 +254,7 @@ export class Exhibition {
   }
 
   private syncSwitch(): void {
-    this.switchEls.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === this.mode)));
+    this.viewSwitch.set(this.mode);
   }
 
   private syncDots(): void {
@@ -478,7 +484,7 @@ export class Exhibition {
     const lines = [...qsa('.om-title .ln > span', this.root)];
     gsap.fromTo(lines, { yPercent: 110 }, { yPercent: 0, duration: 1.1, ease: 'power4.out', stagger: 0.08, delay: 0.1 });
     gsap.fromTo(qs('.om-rule', this.root), { scaleX: 0 }, { scaleX: 1, duration: 1.4, ease: 'power3.inOut', delay: 0.15 });
-    gsap.fromTo(qsa('.om-label, .sw, .om-logo', qs('.om-head', this.root)), { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.8, stagger: 0.04, delay: 0.4 });
+    gsap.fromTo(qsa('.om-label, .sw-track, .om-logo', qs('.om-head', this.root)), { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.8, stagger: 0.04, delay: 0.4 });
     if (this.mode === 'gallery') {
       gsap.fromTo(this.galleryLines(), { yPercent: 110 }, { yPercent: 0, duration: 1, ease: 'power4.out', stagger: 0.06, delay: 0.55 });
       gsap.fromTo(this.navEl, { autoAlpha: 0, y: 10 }, { autoAlpha: 1, y: 0, duration: 0.8, delay: 0.7 });

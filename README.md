@@ -196,6 +196,11 @@ or key. "SOUND — ON/OFF" in the header is remembered per viewer.
     the size comes from `--bead-a` in CSS. Without WebGL, CSS draws plain beads.
 - In gallery view, the other five specimens are hidden. Switching layout moves only
   the selected specimen; the others dissolve out of, or into, their own cards.
-- Switch: black = current mode, yellow = the other mode, as in the gallery reference.
+- View switch, reworked for clarity: a segmented control on a light track. A
+  black thumb sits under the current view and flows to the other one (leading
+  edge first, like the slider's liquid), with white icons clipped to it. The
+  label states the view ("VIEW — GRID") and previews the other one in grey on
+  hover. Yellow only answers the pointer on the option you can switch to. It
+  is a radio group: ←/→ move it when focused, V toggles the view anywhere.
 - Two small mono controls were added in the existing type system: "SOUND — ON/OFF"
   in the header sub-row, and "SCAN SPECIMEN" under the gallery description.

@@ -158,38 +158,95 @@ button {
 }
 
 .om-switch {
+  /* segmented control: option size, track inset and corner radius */
+  --sw: max(28px, calc(34 * var(--u)));
+  --sw-pad: max(3px, calc(4 * var(--u)));
+  --sw-r: max(4px, calc(5 * var(--u)));
   display: inline-flex;
   align-items: center;
-  gap: calc(10 * var(--u));
+  gap: max(10px, calc(14 * var(--u)));
 }
 
-.om-switch .om-label {
-  margin-right: max(2px, calc(2 * var(--u)));
+/* "VIEW — GRID": states the current view; greys out while previewing the other one */
+.om-view {
+  transition: color 0.35s var(--ease-out);
+}
+
+.om-view.is-preview {
+  color: #9a9a9a;
+}
+
+.sw-track {
+  position: relative;
+  display: inline-flex;
+  padding: var(--sw-pad);
+  border-radius: calc(var(--sw-r) + var(--sw-pad));
+  background: var(--card);
+}
+
+/* moved (and stretched) by ViewSwitch */
+.sw-thumb {
+  position: absolute;
+  top: var(--sw-pad);
+  left: 0;
+  width: var(--sw);
+  height: var(--sw);
+  border-radius: var(--sw-r);
+  background: var(--ink);
+  will-change: transform, width;
 }
 
 .sw {
-  width: max(28px, calc(34 * var(--u)));
-  height: max(28px, calc(34 * var(--u)));
-  border-radius: max(4px, calc(5 * var(--u)));
+  position: relative;
+  z-index: 1;
+  width: var(--sw);
+  height: var(--sw);
+  border-radius: var(--sw-r);
   display: grid;
   place-items: center;
-  background: var(--yellow);
-  color: var(--ink);
+  background: transparent;
+  color: #707070;
   transition:
-    background-color 0.6s var(--ease-out),
-    color 0.6s var(--ease-out);
+    background-color 0.35s var(--ease-out),
+    color 0.45s var(--ease-out);
 }
 
-.sw + .sw {
-  margin-left: calc(-6 * var(--u));
+.sw[aria-checked='true'] {
+  cursor: default;
 }
 
-.sw[aria-pressed='true'] {
-  background: var(--ink);
-  color: #fff;
+/* white copy of the icons, clipped to the thumb by ViewSwitch */
+.sw-lit {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: inline-flex;
+  padding: var(--sw-pad);
+  color: #ffffff;
+  pointer-events: none;
 }
 
-.sw svg {
+.sw-lit-icon {
+  width: var(--sw);
+  height: var(--sw);
+}
+
+/* the yellow only answers the pointer, on the option you can switch to */
+@media (hover: hover) {
+  .sw[aria-checked='false']:hover {
+    background: var(--yellow);
+    color: var(--ink);
+  }
+}
+
+.sw:focus-visible {
+  outline: 1px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.sw svg,
+.sw-lit svg {
+  display: block;
   width: 100%;
   height: 100%;
   fill: none;
@@ -589,9 +646,10 @@ button {
     display: none;
   }
 
-  .sw {
-    width: 40px;
-    height: 40px;
+  .om-switch {
+    --sw: 42px;
+    --sw-pad: 3px;
+    --sw-r: 6px;
   }
 
   .gallery {
