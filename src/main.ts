@@ -52,7 +52,7 @@ async function boot() {
   }
 
   const tasks: Promise<unknown>[] = [document.fonts?.ready ?? Promise.resolve()];
-  if (engine) tasks.push(engine.prepare());
+  if (engine) tasks.push(engine.prepare().then(() => exhibition.warm()));
   await runLoader(document.querySelector('.loader') as HTMLElement, tasks);
   engine?.start();
   exhibition.intro();

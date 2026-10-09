@@ -53,7 +53,7 @@ and is written with `history.replaceState`, never as navigation.
 ```
 src/
   main.ts                 boot: engine, specimens, exhibition, loader
-  exhibition/particles/   GPU particle transition: config, ParticleMorph, sim + render shaders
+  exhibition/transmute/   gallery transition: Transmutation (live copies + composite), transmute.frag
   exhibition/LiquidNav.ts  liquid slider: bead layout, droplet motion, hit areas, index label
   exhibition/GooeySlider.ts liquid slider rendering + live thumbnail atlas (gooey.frag)
   core/
@@ -84,36 +84,35 @@ src/
 | Scroll | smooth-scrolls so the selected card is centred, while the specimen tracks it | smooth-scrolls to the top while specimens fly |
 | Text | gallery copy leaves through masks | gallery copy and nav rise in; a scan sweeps the arriving specimen |
 
-**Specimen to specimen** (slider beads, the droplet's arrows, ← →, swipe): one
-particle cloud turns the first specimen into the second. The cloud (65,536
-particles; 16,384 on low-tier devices) starts as the outgoing specimen, loosens
-into fine dust mid-way while every particle glides to its place on the incoming
-specimen and takes on its colour, then slows to rest as the live specimen fades
-in over it. It is one continuous change: no particle appears or vanishes on its
-own, and it all happens in place on the stage.
+**Specimen to specimen** (slider beads, the droplet's arrows, ← →, swipe): a
+surface transmutation. A front sweeps across the specimen on the stage and turns
+it into the next one, with a fine iridescent seam. The new material comes in from
+the side the slider moves to: from the right with →, from the left with ←.
 
-1. **Capture.** Both specimens are rendered in isolation through the main camera,
-   cropped to the stage, into 512² render targets. Particles take the real
-   colours and silhouettes on screen. The incoming one is re-captured every frame
-   while it forms, so the cloud tracks the living specimen.
-2. **Pairing.** The opaque texels of each capture are sorted by angle (narrow
-   wedges around the stage centre), then by distance from it (counting sort,
-   a few ms). Each wedge gets a share of the particles in proportion to both
-   shapes there, and inside it a particle keeps its relative distance from the
-   centre. So each particle has a texel on both specimens in the same direction,
-   it moves only a little in or out, and the cloud stays even all the way (a
-   Hilbert-curve pairing, tried first, left gaps along the quadrant seams).
-3. **Animation.** Deterministic, in the vertex shader. Each region starts at a
-   noise-driven moment. A particle's position and colour blend from one specimen
-   to the other on a curve with a soft start and a long, slow arrival. Mid-way it
-   also loosens: a short drift (about a quarter of the radius) with a slight
-   swirl and lift, a little smaller and fainter. At the end the cloud exactly
-   tiles the incoming silhouette (`sqrt(area / count)`), so the hand-off to the
-   live specimen has no gaps and nothing pops.
+1. **Two live copies.** While it runs, both specimens stay alive (animated, lit,
+   following the light field) but are drawn off screen, each into its own
+   antialiased (MSAA) copy of the stage square through the main camera, at one
+   texel per device pixel.
+2. **One composite.** A quad on the stage blends them across the front
+   (`transmute.frag`). The front is a tilted plane cutting an implied sphere, so
+   the seam curves around the form, roughened by a slow domain-warped noise.
+   Along it: a crisp, antialiased change of material, a slight lens with a touch
+   of dispersion, a thin bright line with an iridescent halo, the new material
+   briefly warmer just behind it and the old one a touch darker just ahead.
+3. **Outlines.** Where the two silhouettes differ, the outline changes over a
+   wider soft band, and whatever of the old form sticks out of the new one melts
+   away as the front approaches, so no fragment is ever left floating.
+4. **Seamless ends.** The seam's light fades in at the start, and the last
+   stretch fades whatever the front has not reached, so at both ends the
+   composite equals the live specimen. Measured: entering and leaving the
+   composite changes the image no more than two ordinary consecutive frames.
+5. **No first-time stall.** Behind the loader every specimen is drawn once into
+   an MSAA copy and onto the canvas, and the composite once, so GPU drivers build
+   their pipeline state before the first click (it cost ~70 ms otherwise).
 
 Navigating during a transition keeps only the latest destination and plays it
 next. Switching to Grid ends the transition instantly in its final state. Every
-parameter lives in `src/exhibition/particles/config.ts` (`galleryParticleConfig`).
+parameter lives in `transmuteConfig` (`src/exhibition/transmute/Transmutation.ts`) and in `transmute.frag`.
 
 ## The six materials
 

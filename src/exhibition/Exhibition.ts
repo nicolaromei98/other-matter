@@ -5,7 +5,7 @@ import type { Sound } from '../core/Sound';
 import type { ScreenCircle } from '../core/types';
 import type { Specimen } from '../specimens/Specimen';
 import { easeMove, lerp } from '../core/math';
-import { ParticleMorph } from './particles/ParticleMorph';
+import { Transmutation } from './transmute/Transmutation';
 import { GooeySlider } from './GooeySlider';
 import { LiquidNav } from './LiquidNav';
 
@@ -81,8 +81,8 @@ export class Exhibition {
   private textToken = 0;
   private wasOver: boolean[] = MATERIALS.map(() => false);
   private swipe: { x: number; y: number; on: boolean } = { x: 0, y: 0, on: false };
-  /** GPU particle transition between gallery specimens (null → spatial fallback). */
-  private readonly morph: ParticleMorph | null;
+  /** Surface transmutation between gallery specimens (null → spatial fallback without WebGL). */
+  private readonly morph: Transmutation | null;
   /** Specimens held on the stage regardless of selection (outgoing, mid-transition). */
   private readonly hold = new Set<number>();
   /** Latest destination requested while a transition runs. */
@@ -132,10 +132,10 @@ export class Exhibition {
     this.measureAnchors();
     this.specimens.forEach((s, i) => Object.assign(s.screen, this.anchors[i]));
 
-    this.morph = engine ? new ParticleMorph(engine) : null;
+    this.morph = engine ? new Transmutation(engine) : null;
+    this.morph?.prepare(this.stageRadius());
     this.slider = engine ? new GooeySlider(engine, specimens, this.nav) : null;
     this.measureNav();
-    if (this.morph && !this.morph.supported) console.info('[particles] falling back to spatial gallery transitions');
     if (engine) engine.onLayout = (dt) => this.layout(dt);
   }
 
@@ -241,6 +241,7 @@ export class Exhibition {
     const onResize = () => {
       this.measureGallery();
       this.measureNav();
+      this.morph?.prepare(this.stageRadius());
     };
     window.addEventListener('resize', onResize);
     document.fonts?.ready.then(onResize);
@@ -293,6 +294,17 @@ export class Exhibition {
         gsap.fromTo(this.galleryLines(), { yPercent: 110 }, { yPercent: 0, duration: 0.85, ease: 'power4.out', stagger: 0.06 });
       },
     });
+  }
+
+  /** GPU warm-up behind the loader (see Transmutation.warm). */
+  warm(): void {
+    this.morph?.warm(this.specimens);
+    this.morph?.prepare(this.stageRadius());
+  }
+
+  private stageRadius(): number {
+    const r = this.stageEl.getBoundingClientRect();
+    return Math.min(r.width, r.height) / 2;
   }
 
   private measureNav(): void {
@@ -571,6 +583,8 @@ export class Exhibition {
 
     // where the stage will be once the page is back at the top
     const st = this.stageEl.getBoundingClientRect();
+    // the site opens on the grid: size the transition buffers now that the stage exists
+    this.morph?.prepare(Math.min(st.width, st.height) / 2);
     const stage: ScreenCircle = {
       x: st.left + st.width / 2,
       y: st.top + st.height / 2 + window.scrollY,
@@ -629,9 +643,9 @@ export class Exhibition {
   }
 
   /**
-   * Gallery: change the specimen on the stage. With GPU support the outgoing
-   * specimen dissolves into particles that reform as the incoming one; while
-   * that runs, only the latest request is kept and played afterwards.
+   * Gallery: change the specimen on the stage. With WebGL the specimen on the
+   * stage transmutes into the next one across a moving front; while that runs,
+   * only the latest request is kept and played afterwards.
    */
   select(i: number): void {
     if (this.mode !== 'gallery') return this.toGallery(i);
@@ -656,7 +670,11 @@ export class Exhibition {
     this.swapGalleryText(i);
     this.nav.select(i);
 
-    const done = this.morph!.run(this.specimens[prev], this.specimens[i], { stage: () => this.anchors[i] });
+    // the new material comes in from the side the slider moves to (as its droplet does)
+    const done = this.morph!.run(this.specimens[prev], this.specimens[i], {
+      stage: () => this.anchors[i],
+      dir: i > prev ? 1 : -1,
+    });
     this.applyInteractivity();
     await done;
 
