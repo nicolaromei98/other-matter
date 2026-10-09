@@ -395,6 +395,7 @@ button {
   align-items: center;
   gap: calc(61 * var(--u));
   padding: calc(20 * var(--u));
+  border-radius: 0.3rem;
   cursor: pointer;
   outline-offset: -1px;
   touch-action: pan-y;
@@ -404,6 +405,7 @@ button {
   position: absolute;
   inset: 0;
   z-index: -1;
+  border-radius: inherit;
   background: var(--card);
 }
 
