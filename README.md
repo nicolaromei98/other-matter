@@ -200,7 +200,9 @@ or key. "SOUND — ON/OFF" in the header is remembered per viewer.
   black thumb sits under the current view and flows to the other one (leading
   edge first, like the slider's liquid), with white icons clipped to it. The
   label states the view ("VIEW — GRID") and previews the other one in grey on
-  hover. Yellow only answers the pointer on the option you can switch to. It
+  hover. Its word is a row of split-flap cells: each changing letter turns over
+  in perspective, flashes a random glyph and lands on the new letter, in a
+  cascade from the left (letters that stay, like GRID → GALLERY's G, don't move). Yellow only answers the pointer on the option you can switch to. It
   is a radio group: ←/→ move it when focused, V toggles the view anywhere.
 - Two small mono controls were added in the existing type system: "SOUND — ON/OFF"
   in the header sub-row, and "SCAN SPECIMEN" under the gallery description.

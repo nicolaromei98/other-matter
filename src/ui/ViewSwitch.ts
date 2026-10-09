@@ -2,6 +2,13 @@ import gsap from 'gsap';
 
 type Mode = 'gallery' | 'grid';
 
+const WORDS: Record<Mode, string> = { grid: 'GRID', gallery: 'GALLERY' };
+/** Cells in the word: the longest word, so the label never changes width. */
+const CELLS = Math.max(...Object.values(WORDS).map((w) => w.length));
+/** Glyphs flashed while a cell turns (all in the Akkurat Mono subset). */
+const GLYPHS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/';
+const BLANK = '\u00a0';
+
 /**
  * The Gallery / Grid switch: a segmented control.
  *
@@ -9,11 +16,17 @@ type Mode = 'gallery' | 'grid';
  * the slider's liquid: its leading edge leaves first and the trailing edge
  * catches up, so it stretches (and thins a little) on the way. A copy of the
  * icons in white is clipped to the thumb, so whatever part of an icon is over
- * it reads white and the rest grey, pixel for pixel while it moves. The label next
- * to it states the current view ("VIEW — GRID") and, once the pointer rests on
- * the other option, previews it in grey (the cross-fade itself is CSS). It is a
- * radio group: arrow keys move the selection, the active option has no hover
- * and does nothing on click.
+ * it reads white and the rest grey, pixel for pixel while it moves.
+ *
+ * The label states the current view ("VIEW — GRID") and, once the pointer
+ * rests on the other option, previews it in grey. Its word is a row of
+ * split-flap cells: each cell whose letter changes turns over in perspective,
+ * flashes a random glyph on the way and lands on the new letter, in a cascade
+ * from the left; letters that stay the same do not move (GRID → GALLERY keeps
+ * its G). Interrupting a turn starts the next one from where the cell is.
+ *
+ * It is a radio group: arrow keys move the selection, the active option has
+ * no hover and does nothing on click.
  */
 export class ViewSwitch {
   private readonly track: HTMLElement;
@@ -21,6 +34,10 @@ export class ViewSwitch {
   private readonly lit: HTMLElement;
   private readonly buttons: HTMLButtonElement[];
   private readonly label: HTMLElement;
+  private readonly cells: HTMLElement[] = [];
+  /** Letter each cell is showing or turning to, and the turn in progress. */
+  private readonly target: string[] = [];
+  private readonly flips: (gsap.core.Timeline | null)[] = [];
   private readonly edge = { l: 0, r: 0 };
   private mode: Mode;
   /** Hover intent: the preview waits a beat, so passing over the option does nothing. */
@@ -40,6 +57,18 @@ export class ViewSwitch {
     this.buttons = Array.from(root.querySelectorAll<HTMLButtonElement>('.sw'));
     this.label = root.querySelector('.om-view') as HTMLElement;
     this.mode = mode;
+
+    const word = this.label.querySelector('.om-view-v') as HTMLElement;
+    word.textContent = '';
+    for (let i = 0; i < CELLS; i++) {
+      const cell = document.createElement('span');
+      cell.textContent = BLANK;
+      word.appendChild(cell);
+      this.cells.push(cell);
+      this.target.push(BLANK);
+      this.flips.push(null);
+    }
+    this.flipTo(WORDS[mode], true);
 
     // the white icons, clipped to the thumb
     this.lit = document.createElement('span');
@@ -90,7 +119,7 @@ export class ViewSwitch {
     });
     this.moveThumb(instant || !moved);
     clearTimeout(this.hoverTimer);
-    this.showLabel(mode, false);
+    this.showLabel(mode, false, instant);
   }
 
   private pick(mode: Mode): void {
@@ -137,8 +166,45 @@ export class ViewSwitch {
     this.lit.style.clipPath = `inset(${v}px ${right}px ${v}px ${l.toFixed(2)}px round ${this.radius}px)`;
   };
 
-  private showLabel(mode: Mode, preview: boolean): void {
-    this.label.dataset.show = mode;
+  private showLabel(mode: Mode, preview: boolean, instant = false): void {
     this.label.classList.toggle('is-preview', preview);
+    this.flipTo(WORDS[mode], instant);
+  }
+
+  /** Turn the cells whose letter changes, left to right. */
+  private flipTo(word: string, instant = false): void {
+    let order = 0;
+    this.cells.forEach((cell, i) => {
+      const next = word[i] ?? BLANK;
+      if (next === this.target[i]) return;
+      this.target[i] = next;
+      // stop the whole turn, letter swaps included, and start from where the cell is
+      this.flips[i]?.kill();
+      this.flips[i] = null;
+      if (instant || this.reducedMotion) {
+        cell.textContent = next;
+        gsap.set(cell, { rotationX: 0, opacity: 1 });
+        return;
+      }
+      const glyph = () => GLYPHS[Math.floor(Math.random() * GLYPHS.length)];
+      this.flips[i] = gsap
+        .timeline({ delay: order++ * 0.045 })
+        // the old letter tilts away…
+        .to(cell, { rotationX: -90, opacity: 0.15, duration: 0.17, ease: 'power2.in' })
+        // …a random glyph comes round the other side…
+        .add(() => {
+          cell.textContent = next === BLANK ? BLANK : glyph();
+        })
+        .fromTo(
+          cell,
+          { rotationX: 90, opacity: 0.15 },
+          // not applied up front: the old letter must tilt away first
+          { rotationX: 0, opacity: 1, duration: 0.42, ease: 'power3.out', immediateRender: false },
+        )
+        // …and resolves into the new letter as it settles
+        .add(() => {
+          cell.textContent = next;
+        }, '-=0.3');
+    });
   }
 }
