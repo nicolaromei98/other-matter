@@ -96,11 +96,11 @@ export class ParticleMorph {
     uP: { value: 0 },
     uStageR: { value: 200 },
     uCamDist: { value: 1000 },
-    uSpread: { value: 1.1 },
-    uLift: { value: 0.22 },
-    uSwirl: { value: 0.7 },
-    uSoft: { value: 1.2 },
-    uDepth: { value: 24 },
+    uSpread: { value: 0.26 },
+    uLift: { value: 0.07 },
+    uSwirl: { value: 0.3 },
+    uDust: { value: 0.45 },
+    uDepth: { value: 14 },
     uStagger: { value: 0.18 },
     uOpacity: { value: 1 },
   };
@@ -350,7 +350,7 @@ export class ParticleMorph {
     this.shared.uSpread.value = cfg.spread * calm;
     this.shared.uLift.value = cfg.lift * calm;
     this.shared.uSwirl.value = cfg.swirl * calm;
-    this.shared.uSoft.value = cfg.softness;
+    this.shared.uDust.value = cfg.dust;
     this.shared.uDepth.value = cfg.depth * calm;
     this.shared.uStagger.value = cfg.stagger;
     this.shared.uOpacity.value = cfg.particleOpacity;
@@ -391,7 +391,7 @@ export class ParticleMorph {
 
     // live hand-off: A dissolves into its particles, B fades in over its own
     const [h0, h1] = this.config.handoff;
-    this.a!.opacity = 1 - smoother(0.0, 0.25, p);
+    this.a!.opacity = 1 - smoother(0.02, 0.38, p);
     this.b!.opacity = smoother(h0, h1, p);
 
     // keep the incoming colours in sync with the living specimen

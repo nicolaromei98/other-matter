@@ -85,11 +85,11 @@ src/
 | Text | gallery copy leaves through masks | gallery copy and nav rise in; a scan sweeps the arriving specimen |
 
 **Specimen to specimen** (slider beads, the droplet's arrow, ← →, swipe): a particle dissolve.
-The outgoing specimen comes apart into fine dust (65,536 particles; 16,384 on
-low-tier devices) that spreads out softly around it, region by region. The
-incoming specimen gathers out of the same kind of dust, then the live specimen
-fades in over it on a long curve. The dust spreads around the stage; nothing
-travels from one place to another.
+The outgoing specimen comes apart into very fine dust (65,536 particles; 16,384
+on low-tier devices) that drifts a short way out and fades, region by region.
+The incoming specimen gathers out of the same dust, then the live specimen fades
+in over it on a long curve. Nothing travels from one place to another: it is a
+light, in-place dissolve.
 
 1. **Capture.** Both specimens are rendered in isolation through the main camera,
    cropped to the stage, into 512² render targets. Particles take the real
@@ -99,11 +99,11 @@ travels from one place to another.
    order and spread evenly over the particles, so coverage is uniform whatever
    the shape. Each particle gets a sub-texel jitter.
 3. **Animation.** Deterministic, in the vertex shader. Each particle has a
-   noise-driven start time. As it disperses it drifts outward with a slow swirl
-   and a little lift, grows into a soft blur and fades. Most fade early, close
-   to the surface; a heavy-tailed few travel far (up to ~1.8× the radius) and
-   linger, so the cloud thins into sparse dust. The incoming set plays the same
-   motion backwards. At the end the incoming particles exactly tile the
+   noise-driven start time. As it disperses it drifts outward (about a quarter
+   of the radius at most) with a slight swirl and lift, shrinks to under half
+   its size and fades on its own schedule, so the specimen thins into a light
+   veil. The incoming set plays the same motion backwards. At the end the
+   incoming particles exactly tile the
    silhouette (`sqrt(area / count)`), so the hand-off to the live specimen has no
    gaps and nothing pops.
 
