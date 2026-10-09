@@ -431,7 +431,7 @@ button {
   font-family: var(--cygre);
   font-weight: 400;
   font-size: max(11px, calc(9.7 * var(--u)));
-  line-height: 1;
+  line-height: 1.25;
 }
 
 .card-name b {
