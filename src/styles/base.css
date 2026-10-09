@@ -105,14 +105,10 @@ button {
   display: block;
 }
 
+/* a specimen under the pointer is clickable: the hand, also while pressed */
 .is-over-specimen,
 .is-over-specimen * {
-  cursor: grab !important;
-}
-
-.is-over-specimen:active,
-.is-over-specimen:active * {
-  cursor: grabbing !important;
+  cursor: pointer !important;
 }
 
 /* ── Frame (design: .slide) ──────────────────────────────────────────── */
