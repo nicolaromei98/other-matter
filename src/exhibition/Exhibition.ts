@@ -115,7 +115,8 @@ export class Exhibition {
     const params = new URLSearchParams(location.search);
     const fromUrl = MATERIALS.findIndex((m) => m.slug === params.get('specimen'));
     this.selected = fromUrl >= 0 ? fromUrl : 0;
-    this.mode = params.get('view') === 'grid' ? 'grid' : 'gallery';
+    // the archive grid is the landing view; ?view=gallery opens on the stage
+    this.mode = params.get('view') === 'gallery' ? 'gallery' : 'grid';
 
     this.build();
     this.bind();

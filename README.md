@@ -13,8 +13,8 @@ npm run preview    # serve dist/ locally
 Deploys to Vercel as is: `vercel.json` sets the Vite build, `dist/` as output and
 year-long immutable caching for the hashed files in `/assets`.
 
-State lives in the URL (`?view=grid&specimen=bio-lens`) and is written with
-`history.replaceState`, never as navigation.
+The site opens on the Grid. State lives in the URL (`?view=gallery&specimen=bio-lens`)
+and is written with `history.replaceState`, never as navigation.
 
 ---
 
