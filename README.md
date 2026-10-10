@@ -60,7 +60,7 @@ src/
   exhibition/InspectSheet.ts Inspect: readings pinned to the specimen's surface
   ui/Flap.ts               split-flap text, used across the interface
   ui/CursorTag.ts          contextual tag next to the pointer
-  ui/ViewSwitch.ts         Gallery / Grid segmented control · ui/Magnetic.ts
+  ui/ViewSwitch.ts         Gallery / Grid segmented control
   core/
     Engine.ts             renderer, pixel-mapped camera, loop, picking, light field, adaptive DPR
     Sound.ts              Web Audio synthesis: one voice per material, reverb, mute
@@ -152,15 +152,20 @@ flaring fibres, the stress network, or optical-power fringes.
   the page takes a whisper of the specimen's colour (`tint` in
   `data/materials.ts`), turning with the transmutation.
 - **Cards open into the stage.** A card's panel flies out to fill the area under
-  the header, on the specimen's clock and curve, and dissolves into the gallery.
-  Going back it gathers in and lands on the card the specimen settles into.
+  the header, on the specimen's clock and curve, its grey turning into the
+  gallery page's colour as it goes, so it simply becomes the page (no fade).
+  Going back, the page condenses into the card's grey as it lands on the card.
 - **Scroll.** In the grid, specimens lag a little behind their cards while the
   user scrolls (each at its own depth) and stretch and tip with the speed.
-- **Cursor tag.** The system hand stays; a small split-flap tag next to it says
-  what a click or drag does: OPEN in the grid, the material's verb on the stage
+- **Cursor tag.** The system hand stays; a small liquid tag next to it says what
+  a click or drag does: OPEN in the grid, the material's verb on the stage
   (STRETCH, WRITE, WARM, DISPERSE, STRIKE, FOCUS), DRAG / ROTATE / CLOSE in
-  Inspect. Text buttons and the switch lean a few px toward a nearby pointer.
-- **Inspect** (button or I; ESC, I or a click on empty space to leave). The stage
+  Inspect. The pill is black liquid (an SVG goo filter on the blob layer only):
+  it drips in with an elastic give, trails a droplet out of its back end while
+  it chases the pointer, and swells or narrows to fit each word, centred.
+  Buttons themselves never move.
+- **Inspect** ("INSPECT SPECIMEN", an outlined pill under the description, or I;
+  ESC, I or a click on empty space to leave). The stage
   specimen comes forward and the room deepens. Three speculative readings
   (`sheet`) are pinned to points on the surface: leader lines draw out, values
   flap in, both ride along as it turns and fade when their point turns away.

@@ -12,7 +12,6 @@ import { InspectSheet } from './InspectSheet';
 import { ViewSwitch } from '../ui/ViewSwitch';
 import { Flap } from '../ui/Flap';
 import { CursorTag } from '../ui/CursorTag';
-import { magnetic } from '../ui/Magnetic';
 import { LiquidNav } from './LiquidNav';
 
 type Mode = 'gallery' | 'grid';
@@ -159,7 +158,6 @@ export class Exhibition {
     document.body.appendChild(this.portal);
     this.build();
     this.bind();
-    magnetic(qsa('.om-sound, .g-scan, .g-inspect, .sw-track', root));
     this.root.dataset.mode = this.mode;
     this.viewSwitch = new ViewSwitch(
       qs('.om-switch', root),
@@ -713,13 +711,12 @@ export class Exhibition {
     this.cardEls.forEach((c) => this.collapseCard(c, true));
     const scrollTarget = this.scrollToCard(this.selected, MOVE);
     const cardBox = this.cardEls[this.selected].getBoundingClientRect();
-    this.flyPortal(this.galleryBox(0), {
-      x: cardBox.left,
-      y: cardBox.top + window.scrollY - scrollTarget,
-      w: cardBox.width,
-      h: cardBox.height,
-      r: this.cardRadius(),
-    }, 'close');
+    this.flyPortal(
+      this.galleryBox(0),
+      { x: cardBox.left, y: cardBox.top + window.scrollY - scrollTarget, w: cardBox.width, h: cardBox.height, r: this.cardRadius() },
+      'close',
+      [MATERIALS[this.selected].tint, this.cardColor()],
+    );
     const card = this.ellipseEls[this.selected].getBoundingClientRect();
     const landing: ScreenCircle = {
       x: card.left + card.width / 2,
@@ -809,7 +806,12 @@ export class Exhibition {
     }
 
     const from = this.cardEls[this.selected].getBoundingClientRect();
-    this.flyPortal({ x: from.left, y: from.top, w: from.width, h: from.height, r: this.cardRadius() }, this.galleryBox(window.scrollY), 'open');
+    this.flyPortal(
+      { x: from.left, y: from.top, w: from.width, h: from.height, r: this.cardRadius() },
+      this.galleryBox(window.scrollY),
+      'open',
+      [this.cardColor(), MATERIALS[this.selected].tint],
+    );
     const order = this.rankFrom(this.selected);
     this.cardEls.forEach((c, i) => this.collapseCard(c, false, order[i] * 0.04));
 
@@ -1011,21 +1013,27 @@ export class Exhibition {
     return { x: 0, y: top, w: window.innerWidth, h: window.innerHeight - top, r: 0 };
   }
 
+  private cardColor(): string {
+    return getComputedStyle(document.documentElement).getPropertyValue('--card').trim() || '#f2f2f2';
+  }
+
   private cardRadius(): number {
     return parseFloat(getComputedStyle(this.cardEls[0]).borderTopLeftRadius) || 0;
   }
 
   /**
    * Fly the card panel between a card and the gallery area, on the same clock
-   * and curve as the specimen. Opening, it fills the area and dissolves into
-   * the gallery; closing, it gathers in and lands exactly on the card, which
-   * takes over under it.
+   * and curve as the specimen, turning its colour on the way: opening, the
+   * card's grey becomes the gallery page as it fills the area; closing, the
+   * page condenses back into the card's grey as it lands on the card, which
+   * takes over under it. No fade: at either end it matches what it hands to.
    */
-  private flyPortal(from: Box, to: Box, kind: 'open' | 'close'): void {
+  private flyPortal(from: Box, to: Box, kind: 'open' | 'close', colors: [string, string]): void {
     this.portalTl?.kill();
     if (this.reduced) return;
     const p = this.portal;
-    const st = { ...from, o: kind === 'open' ? 1 : 0 };
+    const st = { ...from, o: 1 };
+    p.style.backgroundColor = colors[0];
     const apply = () => {
       p.style.transform = `translate(${st.x.toFixed(1)}px, ${st.y.toFixed(1)}px)`;
       p.style.width = `${st.w.toFixed(1)}px`;
@@ -1035,12 +1043,9 @@ export class Exhibition {
     };
     const tl = gsap.timeline({ onUpdate: apply });
     tl.to(st, { x: to.x, y: to.y, w: to.w, h: to.h, r: to.r, duration: MOVE, ease: easeMove }, 0);
-    if (kind === 'open') {
-      tl.to(st, { o: 0, duration: MOVE * 0.5, ease: 'power2.inOut' }, MOVE * 0.5);
-    } else {
-      tl.to(st, { o: 1, duration: 0.35, ease: 'power2.out' }, 0);
-      tl.to(st, { o: 0, duration: 0.3, ease: 'power1.out' }, MOVE);
-    }
+    tl.to(p, { backgroundColor: colors[1], duration: MOVE, ease: 'sine.inOut' }, 0);
+    // what is under it now looks the same: let it go
+    tl.set(st, { o: 0 }, kind === 'open' ? MOVE + 0.15 : MOVE + 0.05);
     this.portalTl = tl;
     apply();
   }
