@@ -52,12 +52,11 @@
           <div class="g-desc">
             <p class="g-short"></p>
             <button data-button-038="" data-button-038-height-hover="-5" data-button-038-width-hover="-10" type="button" class="button-038 g-inspect" aria-label="Inspect specimen">
-              <span class="button-038__bg"></span>
+              <span class="button-038__goo"><span class="button-038__bg"></span><span class="button-038__blob"></span></span>
               <span class="button-038__inner">
                 <span data-button-038-text="" class="button-038__text">INSPECT SPECIMEN</span>
               </span>
             </button>
-            <button class="om-label g-scan" type="button">SCAN SPECIMEN</button>
           </div>
           <nav class="g-nav" aria-label="Specimens">
             <div class="g-pill">
@@ -71,6 +70,12 @@
       </section>
     </div>
 
+    <svg class="om-defs" width="0" height="0" aria-hidden="true">
+      <filter id="om-goo-button" x="-30%" y="-120%" width="160%" height="340%">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="4" />
+        <feColorMatrix mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -9" />
+      </filter>
+    </svg>
     <canvas class="gl" aria-hidden="true"></canvas>
     <div class="hud" hidden></div>
 

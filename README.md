@@ -164,7 +164,10 @@ flaring fibres, the stress network, or optical-power fringes.
 - **Inspect** ("INSPECT SPECIMEN" under the description, or I; ESC, I or a click
   on empty space to leave). The button is Osmo Supply's Button 038 (resource CSS
   kept as is at the end of `base.css`, script in `ui/Button038.ts`), themed black
-  for the light page; it fades with the gallery text when the view changes. The stage
+  for the light page, with a liquid hover (`ui/LiquidButton.ts`): a blob of the
+  same black merged with the pill by a goo filter springs after the pointer, so
+  the pill swells toward it and the bulge follows for a beat when leaving. It
+  fades with the gallery text when the view changes. The stage
   specimen comes forward and the room deepens. Three speculative readings
   (`sheet`) are pinned to points on the surface: leader lines draw out, values
   flap in, both ride along as it turns and fade when their point turns away.
@@ -173,7 +176,7 @@ flaring fibres, the stress network, or optical-power fringes.
   gallery code, card codes (they decode on hover), the cursor tag, the sheet.
   Each landing letter is a tiny, rate-limited click.
 - **Phones.** Tilting the device moves the studio light (iOS asks on first touch).
-- Keys: ← → specimens, S scan, I inspect, V view, ESC close.
+- Keys: ← → specimens, I inspect, V view, ESC close.
 
 ## Sound
 

@@ -13,6 +13,7 @@ import { ViewSwitch } from '../ui/ViewSwitch';
 import { Flap } from '../ui/Flap';
 import { CursorTag } from '../ui/CursorTag';
 import { initButton038 } from '../ui/Button038';
+import { liquidButton } from '../ui/LiquidButton';
 import { LiquidNav } from './LiquidNav';
 
 type Mode = 'gallery' | 'grid';
@@ -142,6 +143,7 @@ export class Exhibition {
 
     this.cursor = new CursorTag(!!engine?.reducedMotion, this.tick);
     document.fonts?.ready.then(() => initButton038(root));
+    liquidButton(qs('.g-inspect', root));
     this.hero = this.buildHero(!!engine?.reducedMotion);
     this.build();
     this.bind();
@@ -245,7 +247,6 @@ export class Exhibition {
   }
 
   private bind(): void {
-    qs('.g-scan', this.root).addEventListener('click', () => this.scan(this.selected));
     qs('.g-inspect', this.root).addEventListener('click', () => this.enterInspect());
     // a click on empty space closes Inspect
     window.addEventListener('pointerup', (e) => {
@@ -282,8 +283,6 @@ export class Exhibition {
       } else if (this.mode === 'gallery' && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
         e.preventDefault();
         this.step(e.key === 'ArrowRight' ? 1 : -1);
-      } else if (e.key === 's' || e.key === 'S') {
-        if (this.mode === 'gallery') this.scan(this.selected);
       } else if (e.key === 'v' || e.key === 'V') {
         // V toggles the view
         if (this.mode === 'grid') this.toGallery();
@@ -354,16 +353,13 @@ export class Exhibition {
     this.shortEl.innerHTML = short;
   }
 
-  /** INSPECT and SCAN: not line-masked, so they fade with the gallery text. */
+  /** INSPECT is not line-masked, so it fades with the gallery text. */
   private galleryButtons(): HTMLElement[] {
-    return qsa('.g-inspect, .g-scan', this.gallery);
+    return qsa('.g-inspect', this.gallery);
   }
 
-  /** Fade them back to their own resting opacity, then hand it back to the stylesheet (hover states). */
   private showGalleryButtons(delay: number): void {
-    const to = { duration: 0.6, delay, ease: 'power2.out', overwrite: true, clearProps: 'opacity,visibility' };
-    gsap.fromTo(qs('.g-inspect', this.gallery), { autoAlpha: 0 }, { ...to, autoAlpha: 1 });
-    gsap.fromTo(qs('.g-scan', this.gallery), { autoAlpha: 0 }, { ...to, autoAlpha: 0.4 });
+    gsap.fromTo(this.galleryButtons(), { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.6, delay, ease: 'power2.out', overwrite: true, clearProps: 'opacity,visibility' });
   }
 
   private galleryLines(): HTMLElement[] {

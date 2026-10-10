@@ -495,17 +495,34 @@ button {
   line-height: 1;
 }
 
-.g-scan {
-  opacity: 0.4;
-  transition: opacity 0.3s;
+/* Inspect specimen: Osmo Supply Button 038 (below), themed for the light page,
+   with a liquid background layer: the pill and a blob merged by #om-goo-button (ui/LiquidButton.ts) */
+.om-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
 }
 
-.g-scan:hover,
-.g-scan:focus-visible {
-  opacity: 1;
+.g-inspect .button-038__goo {
+  grid-area: 1 / 1;
+  position: relative;
+  display: grid;
+  filter: url(#om-goo-button);
 }
 
-/* Inspect specimen: Osmo Supply Button 038 (below), themed for the light page */
+.g-inspect .button-038__blob {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 26px;
+  height: 26px;
+  margin: -13px 0 0 -13px;
+  border-radius: 50%;
+  background: var(--button-038-color-background);
+  pointer-events: none;
+  will-change: transform;
+}
+
 .g-inspect {
   --button-038-color: #ffffff;
   --button-038-color-background: var(--ink);
