@@ -21,9 +21,9 @@ const PER_FRAME = 2;
 
 /**
  * Renders the liquid slider (see LiquidNav for the motion). Every specimen is
- * rendered on its own, by a small camera, into one cell of a thumbnail atlas;
- * the gooey shader draws the black liquid and shows the thumbnails through each
- * bead's porthole.
+ * rendered on its own, by a small camera, with MSAA, then copied into one cell
+ * of a thumbnail atlas; the gooey shader draws the black liquid and shows the
+ * thumbnails through each bead's porthole.
  */
 export class GooeySlider {
   /** Global visibility, tweened with the gallery navigation. */
@@ -31,6 +31,14 @@ export class GooeySlider {
 
   private readonly cam = new THREE.PerspectiveCamera(16, 1, 1, 30);
   private readonly atlas: THREE.WebGLRenderTarget;
+  /**
+   * One thumbnail is drawn here (multisampled) and copied into its atlas cell.
+   * The atlas itself can't be multisampled: three resolves the whole target and
+   * discards the samples on every render, which would wipe the other cells.
+   */
+  private readonly cell: THREE.WebGLRenderTarget;
+  private readonly region = new THREE.Box2();
+  private readonly at = new THREE.Vector2();
   private readonly mesh: THREE.Mesh;
   private readonly mat: THREE.ShaderMaterial;
   private readonly beads = Array.from({ length: 6 }, () => new THREE.Vector4());
@@ -56,9 +64,19 @@ export class GooeySlider {
       type: THREE.UnsignedByteType,
       minFilter: THREE.LinearFilter,
       magFilter: THREE.LinearFilter,
-      depthBuffer: true,
+      depthBuffer: false,
       stencilBuffer: false,
     });
+    this.cell = new THREE.WebGLRenderTarget(this.res, this.res, {
+      type: THREE.UnsignedByteType,
+      minFilter: THREE.LinearFilter,
+      magFilter: THREE.LinearFilter,
+      depthBuffer: true,
+      stencilBuffer: false,
+      samples: 4,
+    });
+    // the copies need the atlas texture to exist before anything renders into it
+    engine.renderer.initRenderTarget(this.atlas);
 
     this.mat = new THREE.ShaderMaterial({
       uniforms: {
@@ -91,6 +109,8 @@ export class GooeySlider {
     if (res === this.res) return;
     this.res = res;
     this.atlas.setSize(res * 6, res);
+    this.cell.setSize(res, res);
+    this.engine.renderer.initRenderTarget(this.atlas);
     this.stale = 6;
   }
 
@@ -124,9 +144,9 @@ export class GooeySlider {
     r.getClearColor(_clear);
     const alpha = r.getClearAlpha();
     r.setClearColor(0x000000, 0);
-    const rt = this.atlas;
     const res = this.res;
-    rt.scissorTest = true;
+    this.region.min.set(0, 0);
+    this.region.max.set(res, res);
     const count = Math.max(PER_FRAME, this.stale);
     this.stale = 0;
     for (let k = 0; k < count; k++) {
@@ -139,17 +159,13 @@ export class GooeySlider {
       g.position.set(0, 0, 0);
       g.scale.setScalar(s.fit);
       s.beginCapture(this.cam, res);
-      rt.viewport.set(i * res, 0, res, res);
-      rt.scissor.set(i * res, 0, res, res);
-      r.setRenderTarget(rt);
+      r.setRenderTarget(this.cell);
       r.clear(true, true, false);
       r.render(e.scene, this.cam);
       s.endCapture(e);
       restore();
+      r.copyTextureToTexture(this.cell.texture, this.atlas.texture, this.region, this.at.set(i * res, 0));
     }
-    rt.scissorTest = false;
-    rt.viewport.set(0, 0, res * 6, res);
-    rt.scissor.set(0, 0, res * 6, res);
     r.setRenderTarget(prev);
     r.setClearColor(_clear, alpha);
   };
@@ -157,6 +173,7 @@ export class GooeySlider {
   dispose(): void {
     this.engine.beforeRender.delete(this.render);
     this.atlas.dispose();
+    this.cell.dispose();
     this.mat.dispose();
     this.mesh.geometry.dispose();
     this.engine.scene.remove(this.mesh);

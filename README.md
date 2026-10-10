@@ -210,13 +210,20 @@ context suspends while the page is hidden.
   bodies deform per vertex, so this matters most in the grid.
 - At most one frame every ~10.5 ms: 120/144 Hz screens draw every other refresh
   (60/72 fps, half the GPU work); 60 and 90 Hz screens draw every refresh.
-- Slider thumbnails refresh round robin, two per frame (~20 fps each).
+- Slider thumbnails refresh round robin, two per frame (~20 fps each). Each is
+  drawn into a small 4× MSAA target and copied into its atlas cell (the atlas
+  itself can't be multisampled: three discards the samples after each resolve).
 - Micro-detail is gated by on-screen size (`uDetail`), march steps and
   octaves drop on the low tier, and off-screen specimens are hidden and skip their
   update.
-- DPR is capped (1.5 desktop / 1.25 low tier); fragment cost grows with its
-  square. It steps down by 0.25 (to 1 / 0.75) when frames stay under ~50 fps for
-  a second.
+- DPR follows the screen up to 2 on desktop (1.5 on the low tier): the canvas
+  holds the slider's liquid edges and icons next to crisp DOM text, and below the
+  native density they turned soft. Fragment cost grows with its square (at
+  1512×945, 2× costs ~5–5.5 ms per frame against ~3.5–4 ms at 1.5×). It steps
+  down by 0.25 (to 1 / 0.75) when frames stay under ~50 fps for about two seconds
+  of drawing. Stalls over 100 ms (shader compiles, texture uploads, tab switches)
+  don't count, nor do the first 4 s or the 1.5 s after the tab comes back:
+  before, a few loading hitches halved the resolution for the whole visit.
 - Production builds minify the GLSL (`vite.config.ts`) and preload the four
   font files visible on first paint. Sound samples load only after the first
   gesture. three.js is tree-shaken to the WebGL renderer (~132 kB gzip, its

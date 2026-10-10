@@ -65,6 +65,8 @@ export class Engine {
   private readonly dprMin: number;
   private frameAvg = 1 / 60;
   private slowTime = 0;
+  /** Seconds before slow frames count: loading, warm-up and intro first, then a moment after the tab returns. */
+  private adaptHold = 4;
   private lastFrame = 0;
   private time = 0;
   private idle = 0;
@@ -107,9 +109,10 @@ export class Engine {
     this.renderer.setClearColor(0x000000, 0);
     this.renderer.sortObjects = true;
 
-    // The specimens are soft, shader-heavy surfaces: fragment cost grows with the
-    // square of the pixel ratio, and past 1.5 the gain is hard to see.
-    const cap = opts.tier === 'high' ? 1.5 : 1.25;
+    // The canvas carries the slider's liquid edges and icons and the specimens'
+    // silhouettes, right next to crisp DOM text: render at the screen's own
+    // density (up to 2x) and let adapt() step down only if frames stay slow.
+    const cap = opts.tier === 'high' ? 2 : 1.5;
     this.dpr = Math.min(window.devicePixelRatio || 1, cap);
     this.dprMin = opts.tier === 'high' ? 1 : 0.75;
 
@@ -120,6 +123,9 @@ export class Engine {
       this.lost = true;
     });
     canvas.addEventListener('webglcontextrestored', () => (this.lost = false));
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) this.adaptHold = Math.max(this.adaptHold, 1.5);
+    });
     this.resize();
     if (!this.pointer.fine) this.listenTilt();
   }
@@ -206,12 +212,23 @@ export class Engine {
     this.camera.updateMatrixWorld();
   }
 
-  /** Degrade resolution when frames stay below ~50 fps for a second; never oscillates back up. */
-  private adapt(dt: number): void {
-    this.frameAvg += (dt - this.frameAvg) * 0.08;
+  /**
+   * Degrade resolution when frames stay below ~50 fps for about two seconds of
+   * drawing; never oscillates back up. Stalls (shader compiles, texture uploads,
+   * tab switches, GC) say nothing about fill rate and are skipped, and so is
+   * everything during adaptHold: a few hitches must not halve the resolution
+   * for the rest of the visit.
+   */
+  private adapt(elapsedMs: number, dt: number): void {
+    if (this.adaptHold > 0) {
+      this.adaptHold -= dt;
+      return;
+    }
+    if (elapsedMs > 100) return;
+    this.frameAvg += (elapsedMs / 1000 - this.frameAvg) * 0.08;
     if (this.frameAvg > 1 / 50) this.slowTime += dt;
     else this.slowTime = Math.max(0, this.slowTime - dt * 0.5);
-    if (this.slowTime > 1 && this.dpr > this.dprMin) {
+    if (this.slowTime > 2 && this.dpr > this.dprMin) {
       this.dpr = Math.max(this.dprMin, this.dpr - 0.25);
       this.renderer.setPixelRatio(this.dpr);
       this.renderer.setSize(this.width, this.height, true);
@@ -301,6 +318,6 @@ export class Engine {
     }
     this.onAfterRender?.(dt);
     this.pointer.endFrame(dt);
-    this.adapt(dt);
+    this.adapt(elapsed, dt);
   };
 }
