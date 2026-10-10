@@ -514,9 +514,9 @@ button {
   position: absolute;
   left: 0;
   top: 0;
-  width: 26px;
-  height: 26px;
-  margin: -13px 0 0 -13px;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
   border-radius: 50%;
   background: var(--button-038-color-background);
   pointer-events: none;

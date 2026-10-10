@@ -62,6 +62,7 @@ src/
   ui/CursorTag.ts          contextual tag next to the pointer
   ui/ViewSwitch.ts         Gallery / Grid segmented control
   ui/Button038.ts          Osmo Supply Button 038 (INSPECT SPECIMEN)
+  ui/LiquidButton.ts       liquid attraction toward a nearby pointer for Button 038
   core/
     Engine.ts             renderer, pixel-mapped camera, loop, picking, light field, adaptive DPR
     Sound.ts              Web Audio synthesis: one voice per material, reverb, mute
@@ -164,10 +165,12 @@ flaring fibres, the stress network, or optical-power fringes.
 - **Inspect** ("INSPECT SPECIMEN" under the description, or I; ESC, I or a click
   on empty space to leave). The button is Osmo Supply's Button 038 (resource CSS
   kept as is at the end of `base.css`, script in `ui/Button038.ts`), themed black
-  for the light page, with a liquid hover (`ui/LiquidButton.ts`): a blob of the
-  same black merged with the pill by a goo filter springs after the pointer, so
-  the pill swells toward it and the bulge follows for a beat when leaving. It
-  fades with the gallery text when the view changes. The stage
+  for the light page, with liquid attraction (`ui/LiquidButton.ts`): when the
+  pointer comes within a few px of the pill from outside, a small tip of the same
+  black (a blob merged with the pill by a goo filter) reaches out of the nearest
+  point of the edge toward it, just wrapping the pointer at about 2 px, and draws
+  back as it leaves. Over the button nothing deforms. It fades with the gallery
+  text when the view changes. The stage
   specimen comes forward and the room deepens. Three speculative readings
   (`sheet`) are pinned to points on the surface: leader lines draw out, values
   flap in, both ride along as it turns and fade when their point turns away.
