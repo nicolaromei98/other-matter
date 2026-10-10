@@ -56,6 +56,11 @@ src/
   exhibition/transmute/   gallery transition: Transmutation (live copies + composite), transmute.frag
   exhibition/LiquidNav.ts  liquid slider: bead layout, droplet motion, hit areas, index label
   exhibition/GooeySlider.ts liquid slider rendering + live thumbnail atlas (gooey.frag)
+  exhibition/Atmosphere.ts the room: contact shadows, vignette around the pointer, grain (atmosphere.frag)
+  exhibition/InspectSheet.ts Inspect: readings pinned to the specimen's surface
+  ui/Flap.ts               split-flap text, used across the interface
+  ui/CursorTag.ts          contextual tag next to the pointer
+  ui/ViewSwitch.ts         Gallery / Grid segmented control · ui/Magnetic.ts
   core/
     Engine.ts             renderer, pixel-mapped camera, loop, picking, light field, adaptive DPR
     Sound.ts              Web Audio synthesis: one voice per material, reverb, mute
@@ -136,6 +141,36 @@ line sweeps the specimen and leaves a material-specific x-ray behind it. That is
 density contours, the memory field and inclusion boundaries, temperature isolines,
 flaring fibres, the stress network, or optical-power fringes.
 
+## Interaction and atmosphere
+
+- **Opening.** After the loader the headline rises at full size with a line of
+  data flapping in under it, then shrinks and slides exactly into the header
+  while the grid assembles. Skipped with reduced motion.
+- **Room.** One full-screen pass under the specimens (`atmosphere.frag`): a soft
+  contact shadow under each body, a faint vignette that opens around the pointer
+  (the same light field that turns the studio), fine paper grain. On the stage,
+  the page takes a whisper of the specimen's colour (`tint` in
+  `data/materials.ts`), turning with the transmutation.
+- **Cards open into the stage.** A card's panel flies out to fill the area under
+  the header, on the specimen's clock and curve, and dissolves into the gallery.
+  Going back it gathers in and lands on the card the specimen settles into.
+- **Scroll.** In the grid, specimens lag a little behind their cards while the
+  user scrolls (each at its own depth) and stretch and tip with the speed.
+- **Cursor tag.** The system hand stays; a small split-flap tag next to it says
+  what a click or drag does: OPEN in the grid, the material's verb on the stage
+  (STRETCH, WRITE, WARM, DISPERSE, STRIKE, FOCUS), DRAG / ROTATE / CLOSE in
+  Inspect. Text buttons and the switch lean a few px toward a nearby pointer.
+- **Inspect** (button or I; ESC, I or a click on empty space to leave). The stage
+  specimen comes forward and the room deepens. Three speculative readings
+  (`sheet`) are pinned to points on the surface: leader lines draw out, values
+  flap in, both ride along as it turns and fade when their point turns away.
+  Dragging turns it like a ball, with inertia; its own reactions pause.
+- **Split-flap** everywhere text changes: the view label, SOUND — ON/OFF, the
+  gallery code, card codes (they decode on hover), the cursor tag, the sheet.
+  Each landing letter is a tiny, rate-limited click.
+- **Phones.** Tilting the device moves the studio light (iOS asks on first touch).
+- Keys: ← → specimens, S scan, I inspect, V view, ESC close.
+
 ## Sound
 
 Voice input was removed. Hovering a live specimen plays its own voice through
@@ -148,6 +183,11 @@ screen position. The material resonates with it: a pressure shell travels throug
 it from the point where the cursor entered (`uRes`, `uResPos`, `uResAge`).
 Browsers only allow audio after a gesture, so sounds start after the first click
 or key. "SOUND — ON/OFF" in the header is remembered per viewer.
+
+A very low room tone (two breathing sine drones a fifth apart, a soft noise bed
+through a drifting lowpass) fades in after the first gesture. Its filter takes a
+colour per specimen on the stage. It follows the mute toggle, and the audio
+context suspends while the page is hidden.
 
 ## Performance
 
