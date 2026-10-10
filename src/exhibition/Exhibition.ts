@@ -115,6 +115,9 @@ export class Exhibition {
   /** Inspect: the stage specimen close up, turnable, with its sheet pinned to it. */
   inspecting = false;
   private readonly sheet: InspectSheet | null;
+  /** Opening title card (null with reduced motion): the headline at full size, then into the header. */
+  private readonly hero: HTMLElement | null;
+  private heroData?: Flap;
   /** A card's panel, flown between the card and the gallery area (one continuous camera move). */
   private readonly portal: HTMLElement;
   private portalTl?: gsap.core.Timeline;
@@ -149,6 +152,7 @@ export class Exhibition {
     this.mode = params.get('view') === 'gallery' ? 'gallery' : 'grid';
 
     this.cursor = new CursorTag(!!engine?.reducedMotion, this.tick);
+    this.hero = this.buildHero(!!engine?.reducedMotion);
     this.portal = document.createElement('div');
     this.portal.className = 'om-portal';
     this.portal.setAttribute('aria-hidden', 'true');
@@ -595,8 +599,66 @@ export class Exhibition {
 
   // ── Public transitions ─────────────────────────────────────────────────
 
-  /** Entry choreography: every specimen grows out of its own anchor. */
+  /** The opening title card: in place under the loader, so nothing of the page shows before it. */
+  private buildHero(reduced: boolean): HTMLElement | null {
+    if (reduced) return null;
+    const hero = document.createElement('div');
+    hero.className = 'om-hero';
+    hero.setAttribute('aria-hidden', 'true');
+    hero.innerHTML = `
+      <div class="om-hero-bg"></div>
+      <div class="om-hero-title">${ln('A catalogue of matter')}${ln('that does not yet exist.')}</div>
+      <div class="om-label om-hero-data"></div>`;
+    document.body.appendChild(hero);
+    gsap.set(qsa('.om-hero-title .ln > span', hero), { yPercent: 110 });
+    this.heroData = new Flap(qs('.om-hero-data', hero), '\u00a0'.repeat(36), { cells: 36, stagger: 0.02, onLand: this.tick });
+    return hero;
+  }
+
+  /**
+   * The headline rises at full size with a line of data under it, holds, then
+   * shrinks and slides exactly into its place in the header while the card
+   * dissolves over the page. Returns when (s) the page choreography should start.
+   */
+  private playHero(): number {
+    const hero = this.hero;
+    if (!hero) return 0;
+    const title = qs('.om-hero-title', hero);
+    const head = qs('.om-title', this.root);
+    const headLines = qsa('.ln > span', head);
+    gsap.set(headLines, { yPercent: 110 });
+    gsap.to(qsa('.ln > span', title), { yPercent: 0, duration: 1.05, ease: 'power4.out', stagger: 0.09, delay: 0.1 });
+    gsap.delayedCall(0.55, () => this.heroData?.set('06 SPECIMENS · RENDERED LIVE · WEBGL'.padEnd(36, '\u00a0')));
+    const flipAt = 1.8;
+    gsap.delayedCall(flipAt, () => {
+      const from = title.getBoundingClientRect();
+      const to = head.getBoundingClientRect();
+      gsap.to(title, {
+        x: to.left - from.left,
+        y: to.top - from.top,
+        scale: to.height / from.height,
+        duration: 1.15,
+        ease: easeMove,
+        onComplete: () => {
+          // the header's own title takes over exactly where this one landed
+          gsap.set(headLines, { yPercent: 0 });
+          hero.remove();
+        },
+      });
+      gsap.to(qs('.om-hero-bg', hero), { opacity: 0, duration: 0.9, ease: 'power2.inOut' });
+      gsap.to(qs('.om-hero-data', hero), { opacity: 0, duration: 0.35, ease: 'power2.in' });
+    });
+    return flipAt;
+  }
+
+  /** Entry: the opening title card (if any), then every specimen grows out of its own anchor. */
   intro(): void {
+    const wait = this.playHero();
+    if (wait > 0) gsap.delayedCall(wait, () => this.introPage(true));
+    else this.introPage(false);
+  }
+
+  private introPage(titlePlaced: boolean): void {
     this.measureAnchors();
     const order = this.rankFrom(this.selected);
     this.specimens.forEach((_, i) => {
@@ -609,8 +671,10 @@ export class Exhibition {
         logScale: false,
       });
     });
-    const lines = [...qsa('.om-title .ln > span', this.root)];
-    gsap.fromTo(lines, { yPercent: 110 }, { yPercent: 0, duration: 1.1, ease: 'power4.out', stagger: 0.08, delay: 0.1 });
+    if (!titlePlaced) {
+      const lines = [...qsa('.om-title .ln > span', this.root)];
+      gsap.fromTo(lines, { yPercent: 110 }, { yPercent: 0, duration: 1.1, ease: 'power4.out', stagger: 0.08, delay: 0.1 });
+    }
     gsap.fromTo(qs('.om-rule', this.root), { scaleX: 0 }, { scaleX: 1, duration: 1.4, ease: 'power3.inOut', delay: 0.15 });
     gsap.fromTo(qsa('.om-label, .sw-track, .om-logo', qs('.om-head', this.root)), { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.8, stagger: 0.04, delay: 0.4 });
     if (this.mode === 'gallery') {

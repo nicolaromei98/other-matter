@@ -48,7 +48,7 @@ async function boot() {
   if (engine) {
     const debug = import.meta.env.DEV || new URLSearchParams(location.search).has('debug');
     if (debug) new Diagnostics(engine, document.querySelector('.hud') as HTMLElement);
-    if (import.meta.env.DEV) Object.assign(window, { __om: { engine, exhibition, specimens, sound } });
+    if (import.meta.env.DEV) Object.assign(window, { __om: { engine, exhibition, specimens, sound, gsap } });
   }
 
   const tasks: Promise<unknown>[] = [document.fonts?.ready ?? Promise.resolve()];

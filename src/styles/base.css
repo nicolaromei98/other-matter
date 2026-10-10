@@ -120,6 +120,41 @@ button {
   cursor: pointer !important;
 }
 
+/* Opening title card (Exhibition.playHero): the headline at full size, then into the header */
+.om-hero {
+  --hero: max(30px, 6.6vw);
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+}
+
+.om-hero-bg {
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+}
+
+.om-hero-title {
+  position: absolute;
+  left: var(--pad);
+  top: 50%;
+  margin-top: calc(var(--hero) * -1.1);
+  font-family: var(--manrope);
+  font-weight: 400;
+  font-size: var(--hero);
+  line-height: 1;
+  letter-spacing: 0;
+  white-space: nowrap;
+  transform-origin: 0 0;
+}
+
+.om-hero-data {
+  position: absolute;
+  left: var(--pad);
+  top: calc(50% + var(--hero) * 1.1 + 24px);
+}
+
 /* Card panel flown between a card and the gallery area (Exhibition.flyPortal):
    under the specimens' canvas, over the page */
 .om-portal {
