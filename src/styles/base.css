@@ -120,6 +120,19 @@ button {
   cursor: pointer !important;
 }
 
+/* Card panel flown between a card and the gallery area (Exhibition.flyPortal):
+   under the specimens' canvas, over the page */
+.om-portal {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 5;
+  background: var(--card);
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform, width, height, opacity;
+}
+
 /* Contextual tag that rides next to the pointer (ui/CursorTag.ts) */
 .om-cursor {
   position: fixed;

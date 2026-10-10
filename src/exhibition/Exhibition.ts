@@ -50,6 +50,14 @@ interface TrackOptions {
   logScale?: boolean;
 }
 
+interface Box {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  r: number;
+}
+
 const pad = (n: number) => String(n).padStart(2, '0');
 const qs = <T extends Element = HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector(sel) as T;
 const qsa = <T extends Element = HTMLElement>(sel: string, root: ParentNode = document) => Array.from(root.querySelectorAll(sel)) as T[];
@@ -107,6 +115,9 @@ export class Exhibition {
   /** Inspect: the stage specimen close up, turnable, with its sheet pinned to it. */
   inspecting = false;
   private readonly sheet: InspectSheet | null;
+  /** A card's panel, flown between the card and the gallery area (one continuous camera move). */
+  private readonly portal: HTMLElement;
+  private portalTl?: gsap.core.Timeline;
   /** Contextual tag next to the pointer, and the card under it (grid). */
   private readonly cursor: CursorTag;
   private cardHover: number | null = null;
@@ -138,6 +149,10 @@ export class Exhibition {
     this.mode = params.get('view') === 'gallery' ? 'gallery' : 'grid';
 
     this.cursor = new CursorTag(!!engine?.reducedMotion, this.tick);
+    this.portal = document.createElement('div');
+    this.portal.className = 'om-portal';
+    this.portal.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(this.portal);
     this.build();
     this.bind();
     magnetic(qsa('.om-sound, .g-scan, .g-inspect, .sw-track', root));
@@ -632,6 +647,14 @@ export class Exhibition {
     // Grid is laid out now: prepare cards hidden, they appear as specimens land.
     this.cardEls.forEach((c) => this.collapseCard(c, true));
     const scrollTarget = this.scrollToCard(this.selected, MOVE);
+    const cardBox = this.cardEls[this.selected].getBoundingClientRect();
+    this.flyPortal(this.galleryBox(0), {
+      x: cardBox.left,
+      y: cardBox.top + window.scrollY - scrollTarget,
+      w: cardBox.width,
+      h: cardBox.height,
+      r: this.cardRadius(),
+    }, 'close');
     const card = this.ellipseEls[this.selected].getBoundingClientRect();
     const landing: ScreenCircle = {
       x: card.left + card.width / 2,
@@ -653,7 +676,8 @@ export class Exhibition {
         gsap.killTweensOf([s, this.fx[i]]);
         this.fx[i].scale = 1;
         this.startTrack(i, { duration: MOVE, lift: 0.08, ease: easeMove, to: landing });
-        this.revealCard(this.cardEls[i], 0.65);
+        // its card is the panel that is shrinking onto it: it takes over as the panel lands
+        this.revealCard(this.cardEls[i], this.reduced ? 0.65 : MOVE - 0.2, !this.reduced);
         end = Math.max(end, 1.8);
         return;
       }
@@ -719,6 +743,8 @@ export class Exhibition {
       else window.scrollTo({ top: 0, behavior: 'auto' });
     }
 
+    const from = this.cardEls[this.selected].getBoundingClientRect();
+    this.flyPortal({ x: from.left, y: from.top, w: from.width, h: from.height, r: this.cardRadius() }, this.galleryBox(window.scrollY), 'open');
     const order = this.rankFrom(this.selected);
     this.cardEls.forEach((c, i) => this.collapseCard(c, false, order[i] * 0.04));
 
@@ -914,12 +940,53 @@ export class Exhibition {
     return qsa('.ln > span', card);
   }
 
+  /** The gallery area once the page is at the top: everything under the header. */
+  private galleryBox(scrollY: number): Box {
+    const top = this.stageArea.getBoundingClientRect().top + scrollY;
+    return { x: 0, y: top, w: window.innerWidth, h: window.innerHeight - top, r: 0 };
+  }
+
+  private cardRadius(): number {
+    return parseFloat(getComputedStyle(this.cardEls[0]).borderTopLeftRadius) || 0;
+  }
+
+  /**
+   * Fly the card panel between a card and the gallery area, on the same clock
+   * and curve as the specimen. Opening, it fills the area and dissolves into
+   * the gallery; closing, it gathers in and lands exactly on the card, which
+   * takes over under it.
+   */
+  private flyPortal(from: Box, to: Box, kind: 'open' | 'close'): void {
+    this.portalTl?.kill();
+    if (this.reduced) return;
+    const p = this.portal;
+    const st = { ...from, o: kind === 'open' ? 1 : 0 };
+    const apply = () => {
+      p.style.transform = `translate(${st.x.toFixed(1)}px, ${st.y.toFixed(1)}px)`;
+      p.style.width = `${st.w.toFixed(1)}px`;
+      p.style.height = `${st.h.toFixed(1)}px`;
+      p.style.borderRadius = `${st.r.toFixed(2)}px`;
+      p.style.opacity = st.o.toFixed(3);
+    };
+    const tl = gsap.timeline({ onUpdate: apply });
+    tl.to(st, { x: to.x, y: to.y, w: to.w, h: to.h, r: to.r, duration: MOVE, ease: easeMove }, 0);
+    if (kind === 'open') {
+      tl.to(st, { o: 0, duration: MOVE * 0.5, ease: 'power2.inOut' }, MOVE * 0.5);
+    } else {
+      tl.to(st, { o: 1, duration: 0.35, ease: 'power2.out' }, 0);
+      tl.to(st, { o: 0, duration: 0.3, ease: 'power1.out' }, MOVE);
+    }
+    this.portalTl = tl;
+    apply();
+  }
+
   /** Card background fades in under the landed specimen; labels rise in after it. */
-  private revealCard(card: HTMLElement, delay: number): void {
+  private revealCard(card: HTMLElement, delay: number, instantBg = false): void {
     const bg = qs('.card-bg', card);
     const lines = this.cardLines(card);
     gsap.killTweensOf([bg, ...lines]);
-    gsap.fromTo(bg, { opacity: 0 }, { opacity: 1, duration: 0.9, delay, ease: 'power2.out' });
+    if (instantBg) gsap.fromTo(bg, { opacity: 0 }, { opacity: 1, duration: 0.01, delay });
+    else gsap.fromTo(bg, { opacity: 0 }, { opacity: 1, duration: 0.9, delay, ease: 'power2.out' });
     gsap.fromTo(lines, { yPercent: 110 }, { yPercent: 0, duration: 0.8, delay: delay + 0.2, ease: 'power4.out', stagger: 0.035 });
   }
 
