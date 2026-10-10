@@ -59,7 +59,7 @@ src/
   exhibition/Atmosphere.ts the room: contact shadows, vignette around the pointer, grain (atmosphere.frag)
   exhibition/InspectSheet.ts Inspect: readings pinned to the specimen's surface
   ui/Flap.ts               split-flap text, used across the interface
-  ui/CursorTag.ts          contextual tag next to the pointer
+  ui/LiquidCursor.ts       the pointer as a drop of liquid, with hover / press / word states
   ui/ViewSwitch.ts         Gallery / Grid segmented control
   ui/Button038.ts          Osmo Supply Button 038 (INSPECT SPECIMEN)
   ui/LiquidButton.ts       liquid attraction toward a nearby pointer for Button 038
@@ -155,13 +155,18 @@ flaring fibres, the stress network, or optical-power fringes.
   `data/materials.ts`), turning with the transmutation.
 - **Scroll.** In the grid, specimens lag a little behind their cards while the
   user scrolls (each at its own depth) and stretch and tip with the speed.
-- **Cursor tag.** The system hand stays; a small liquid tag next to it says what
-  a click or drag does: OPEN in the grid, the material's verb on the stage
-  (STRETCH, WRITE, WARM, DISPERSE, STRIKE, FOCUS), DRAG / ROTATE / CLOSE in
-  Inspect. The pill is black liquid (an SVG goo filter on the blob layer only):
-  it drips in with an elastic give, trails a droplet out of its back end while
-  it chases the pointer, and swells or narrows to fit each word, centred.
-  Buttons themselves never move.
+- **Liquid cursor** (fine pointers). The system cursor is hidden; the pointer is
+  a drop of liquid on the hotspot (an SVG goo filter merges a body and a
+  droplet). Moving, the droplet trails out of its back like a tail and is drawn
+  back in. Over a control it swells; pressed, it squeezes. Drop and hover are a
+  monochrome negative of what is underneath (white in difference blending,
+  then a grey copy in saturation blending to take the hue out), so they read
+  black on the page, white over the black controls, and text under them stays
+  legible. When a click or drag does something specific the drop stretches into
+  a black pill carrying the word, with a white dot on the hotspot: OPEN in the
+  grid, the material's verb on the stage (STRETCH, WRITE, WARM, DISPERSE,
+  STRIKE, FOCUS), DRAG / ROTATE / CLOSE in Inspect. Near the right edge the pill
+  grows to the left. Buttons themselves never move.
 - **Inspect** ("INSPECT SPECIMEN" under the description, or I; ESC, I or a click
   on empty space to leave). The button is Osmo Supply's Button 038 (resource CSS
   kept as is at the end of `base.css`, script in `ui/Button038.ts`), themed black
@@ -176,7 +181,7 @@ flaring fibres, the stress network, or optical-power fringes.
   flap in, both ride along as it turns and fade when their point turns away.
   Dragging turns it like a ball, with inertia; its own reactions pause.
 - **Split-flap** everywhere text changes: the view label, SOUND — ON/OFF, the
-  gallery code, card codes (they decode on hover), the cursor tag, the sheet.
+  gallery code, card codes (they decode on hover), the cursor's word, the sheet.
   Each landing letter is a tiny, rate-limited click.
 - **Phones.** Tilting the device moves the studio light (iOS asks on first touch).
 - Keys: ← → specimens, I inspect, V view, ESC close.

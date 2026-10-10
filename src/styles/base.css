@@ -155,8 +155,14 @@ button {
   top: calc(50% + var(--hero) * 1.1 + 24px);
 }
 
-/* Contextual liquid tag that rides next to the pointer (ui/CursorTag.ts) */
-.om-cursor {
+/* The pointer is a drop of liquid (ui/LiquidCursor.ts): the system cursor is hidden */
+.has-liquid-cursor,
+.has-liquid-cursor * {
+  cursor: none !important;
+}
+
+.om-cursor,
+.om-cursor-mono {
   position: fixed;
   left: 0;
   top: 0;
@@ -165,47 +171,74 @@ button {
   will-change: transform;
 }
 
+/* drop and hover: white in difference (black on the page, white over black controls)… */
+.om-cursor {
+  mix-blend-mode: difference;
+  --cursor-liquid: #ffffff;
+}
+
+/* …and a grey copy in saturation on top, so the negative stays black and white */
+.om-cursor-mono {
+  z-index: 41;
+  mix-blend-mode: saturation;
+  --cursor-liquid: #808080;
+}
+
+.om-cursor-mono.is-off {
+  display: none;
+}
+
+/* carrying a word: plain black liquid, white text */
+.om-cursor.is-label {
+  mix-blend-mode: normal;
+  --cursor-liquid: var(--ink);
+}
+
 .om-cursor-defs {
   position: absolute;
   width: 0;
   height: 0;
 }
 
-/* the black liquid: pill + trailing droplet, merged by the goo filter (24px of room around them) */
+/* the liquid: body + trailing droplet, merged by the goo filter; the hotspot is at (150, 60) */
 .om-cursor-goo {
   position: absolute;
-  left: -24px;
-  top: -24px;
-  width: 260px;
-  height: 70px;
+  left: -150px;
+  top: -60px;
+  width: 300px;
+  height: 120px;
   filter: url(#om-goo);
 }
 
-.om-cursor-pill {
+.om-cursor-body,
+.om-cursor-drop {
   position: absolute;
-  left: 24px;
-  top: 24px;
-  height: 22px;
-  border-radius: 11px;
-  background: var(--ink);
+  left: 0;
+  top: 0;
+  background: var(--cursor-liquid);
 }
 
 .om-cursor-drop {
-  position: absolute;
-  left: 16px;
-  top: 16px;
-  width: 16px;
-  height: 16px;
   border-radius: 50%;
-  background: var(--ink);
 }
 
-/* the word, crisp, centred in the pill (width set to the word by CursorTag) */
+/* white dot left on the hotspot inside the pill */
+.om-cursor-dot {
+  position: absolute;
+  left: -2px;
+  top: -2px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+/* the word, crisp (width set to the word by LiquidCursor) */
 .om-cursor .om-cursor-text {
   position: absolute;
   left: 0;
   top: 0;
-  height: 22px;
+  height: 24px;
   display: flex;
   align-items: center;
   overflow: hidden;

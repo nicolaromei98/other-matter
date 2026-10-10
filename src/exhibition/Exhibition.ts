@@ -11,7 +11,7 @@ import { Atmosphere } from './Atmosphere';
 import { InspectSheet } from './InspectSheet';
 import { ViewSwitch } from '../ui/ViewSwitch';
 import { Flap } from '../ui/Flap';
-import { CursorTag } from '../ui/CursorTag';
+import { LiquidCursor } from '../ui/LiquidCursor';
 import { initButton038 } from '../ui/Button038';
 import { liquidButton } from '../ui/LiquidButton';
 import { LiquidNav } from './LiquidNav';
@@ -112,7 +112,7 @@ export class Exhibition {
   private readonly hero: HTMLElement | null;
   private heroData?: Flap;
   /** Contextual tag next to the pointer, and the card under it (grid). */
-  private readonly cursor: CursorTag;
+  private readonly cursor: LiquidCursor;
   private cardHover: number | null = null;
   /** Grid scroll response: smoothed page velocity (px/s) and the last scroll position. */
   private scrollVel = 0;
@@ -141,7 +141,7 @@ export class Exhibition {
     // the archive grid is the landing view; ?view=gallery opens on the stage
     this.mode = params.get('view') === 'gallery' ? 'gallery' : 'grid';
 
-    this.cursor = new CursorTag(!!engine?.reducedMotion, this.tick);
+    this.cursor = new LiquidCursor(!!engine?.reducedMotion, this.tick);
     document.fonts?.ready.then(() => initButton038(root));
     liquidButton(qs('.g-inspect', root));
     this.hero = this.buildHero(!!engine?.reducedMotion);
@@ -507,7 +507,7 @@ export class Exhibition {
     }
   }
 
-  /** What the pointer would do here, for the cursor tag (null: nothing to say). */
+  /** What the pointer would do here, said by the liquid cursor (null: nothing to say). */
   private cursorContext(): string | null {
     const e = this.engine;
     if (!e || e.pointer.x < -1000) return null;
@@ -515,7 +515,9 @@ export class Exhibition {
     const onSpecimen = !!h && h.interactive && h.input.hit;
     if (this.inspecting) {
       if (h === this.specimens[this.selected] && h.input.pressed) return 'ROTATE';
-      return onSpecimen ? 'DRAG' : 'CLOSE';
+      if (onSpecimen) return 'DRAG';
+      // a click on a control (sound, view switch…) doesn't close: no word there
+      return this.cursor.overControl ? null : 'CLOSE';
     }
     if (this.mode === 'grid') return onSpecimen || this.cardHover !== null ? 'OPEN' : null;
     if (onSpecimen && h === this.specimens[this.selected] && !this.morph?.running) return h.entry.verb;
