@@ -356,6 +356,7 @@ export class Exhibition {
   /** The page takes a whisper of the colour of the specimen on the stage (white in the grid). */
   private setTint(i: number | null): void {
     document.documentElement.style.setProperty('--bg', i === null ? '#ffffff' : MATERIALS[i].tint);
+    this.sound.mood(i === null ? null : MATERIALS[i].slug);
   }
 
   private galleryMarkup(m: MaterialEntry): [string, string] {

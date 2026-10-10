@@ -71,6 +71,8 @@ export class Engine {
   private captured: Specimen | null = null;
   private envYaw = 0;
   private envPitch = 0;
+  /** Phones: device tilt drives the light field instead of the pointer. */
+  private tilt: { yaw: number; pitch: number } | null = null;
   private lost = false;
   private running = false;
   private readonly raycaster = new THREE.Raycaster();
@@ -119,6 +121,33 @@ export class Engine {
     });
     canvas.addEventListener('webglcontextrestored', () => (this.lost = false));
     this.resize();
+    if (!this.pointer.fine) this.listenTilt();
+  }
+
+  /**
+   * Device orientation → light field. iOS asks for permission, which only a
+   * user gesture may request: the first touch does it.
+   */
+  private listenTilt(): void {
+    const Orientation = (window as { DeviceOrientationEvent?: { requestPermission?: () => Promise<string> } }).DeviceOrientationEvent;
+    if (!Orientation) return;
+    const listen = () =>
+      window.addEventListener('deviceorientation', (e) => {
+        if (e.gamma === null || e.beta === null) return;
+        const c = (v: number) => Math.max(-1, Math.min(1, v));
+        this.tilt = { yaw: c(e.gamma / 35) * 0.375, pitch: c((e.beta - 45) / 35) * 0.2 };
+      });
+    if (typeof Orientation.requestPermission === 'function') {
+      const ask = () => {
+        window.removeEventListener('touchend', ask);
+        Orientation.requestPermission!()
+          .then((state) => state === 'granted' && listen())
+          .catch(() => {});
+      };
+      window.addEventListener('touchend', ask);
+    } else {
+      listen();
+    }
   }
 
   get pixelRatio(): number {
@@ -195,8 +224,12 @@ export class Engine {
   private updateLightField(dt: number): void {
     const p = this.pointer;
     const on = p.x > -1000;
-    const yaw = on ? (p.x / this.width - 0.5) * 0.75 : 0;
-    const pitch = on ? (p.y / this.height - 0.5) * 0.4 : 0;
+    let yaw = on ? (p.x / this.width - 0.5) * 0.75 : 0;
+    let pitch = on ? (p.y / this.height - 0.5) * 0.4 : 0;
+    if (this.tilt) {
+      yaw = this.tilt.yaw;
+      pitch = this.tilt.pitch;
+    }
     this.envYaw = damp(this.envYaw, yaw, 2.2, dt);
     this.envPitch = damp(this.envPitch, pitch, 2.2, dt);
     _euler.set(this.envPitch, this.envYaw, 0);

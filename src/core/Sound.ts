@@ -34,6 +34,9 @@ export class Sound {
   private buffers = new Map<Slug, AudioBuffer>();
   /** Currently playing sample per material (faded out when it is triggered again). */
   private voices = new Map<Slug, { src: AudioBufferSourceNode; gain: GainNode }>();
+  /** Room tone: its level and the filter that colours it per material. */
+  private amb?: { gain: GainNode; filter: BiquadFilterNode };
+  private moodSlug: Slug | null = null;
 
   constructor() {
     let stored: string | null = null;
@@ -50,6 +53,12 @@ export class Sound {
     };
     window.addEventListener('pointerdown', unlock);
     window.addEventListener('keydown', unlock);
+    // nothing to hear while the page is hidden
+    document.addEventListener('visibilitychange', () => {
+      if (!this.ctx) return;
+      if (document.hidden) this.ctx.suspend().catch(() => {});
+      else if (this.enabled) this.ctx.resume().catch(() => {});
+    });
   }
 
   onChange(fn: (on: boolean) => void): void {
@@ -64,6 +73,7 @@ export class Sound {
       /* storage unavailable */
     }
     if (this.enabled) this.ensure();
+    this.ambient(this.enabled);
     this.listeners.forEach((fn) => fn(this.enabled));
   }
 
@@ -89,9 +99,98 @@ export class Sound {
       this.noise = this.noiseBuffer(ctx, 2);
       this.ctx = ctx;
       this.loadSamples(ctx);
+      this.startAmbient(ctx);
+      this.ambient(this.enabled);
     }
     if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
     return this.ctx;
+  }
+
+  /**
+   * Room tone, very low: two sine drones a fifth apart, each breathing on its
+   * own slow cycle, and a bed of soft noise, all through a lowpass that drifts.
+   * The filter takes a colour per material (mood): airy for Aerogel and Dust
+   * Silk, dark for Liquid Stone.
+   */
+  private startAmbient(ctx: AudioContext): void {
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    gain.connect(this.master!);
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 420;
+    filter.Q.value = 0.5;
+    filter.connect(gain);
+    const send = ctx.createGain();
+    send.gain.value = 0.4;
+    filter.connect(send);
+    send.connect(this.wet!);
+
+    const bed = ctx.createBufferSource();
+    bed.buffer = this.noiseBuffer(ctx, 7);
+    bed.loop = true;
+    const bedGain = ctx.createGain();
+    bedGain.gain.value = 0.32;
+    bed.connect(bedGain);
+    bedGain.connect(filter);
+    bed.start();
+
+    [55, 82.41].forEach((f, i) => {
+      const o = ctx.createOscillator();
+      o.frequency.value = f;
+      const g = ctx.createGain();
+      g.gain.value = 0.16;
+      const breath = ctx.createOscillator();
+      breath.frequency.value = 0.045 + i * 0.027;
+      const depth = ctx.createGain();
+      depth.gain.value = 0.12;
+      breath.connect(depth);
+      depth.connect(g.gain);
+      o.connect(g);
+      g.connect(filter);
+      o.start();
+      breath.start();
+    });
+
+    const drift = ctx.createOscillator();
+    drift.frequency.value = 0.025;
+    const range = ctx.createGain();
+    range.gain.value = 120;
+    drift.connect(range);
+    range.connect(filter.frequency);
+    drift.start();
+
+    this.amb = { gain, filter };
+    this.mood(this.moodSlug);
+  }
+
+  /** Fade the room tone in or out. */
+  private ambient(on: boolean): void {
+    if (!this.amb || !this.ctx) return;
+    const t = this.ctx.currentTime;
+    const g = this.amb.gain.gain;
+    g.cancelScheduledValues(t);
+    g.setValueAtTime(g.value, t);
+    g.linearRampToValueAtTime(on ? 0.075 : 0, t + (on ? 3 : 0.6));
+  }
+
+  /** Colour the room tone for the specimen on the stage (null: neutral, in the grid). */
+  mood(slug: Slug | null): void {
+    this.moodSlug = slug;
+    if (!this.amb || !this.ctx) return;
+    const cutoff: Record<Slug, number> = {
+      'aerogel-skin': 640,
+      'memory-glass': 380,
+      'thermal-foam': 470,
+      'dust-silk': 720,
+      'liquid-stone': 250,
+      'bio-lens': 520,
+    };
+    const f = this.amb.filter.frequency;
+    const t = this.ctx.currentTime;
+    f.cancelScheduledValues(t);
+    f.setValueAtTime(f.value, t);
+    f.linearRampToValueAtTime(slug ? cutoff[slug] : 420, t + 2.2);
   }
 
   /** Fetch and decode the recorded voices (once, after the audio context exists). */
