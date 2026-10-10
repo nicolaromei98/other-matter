@@ -8,6 +8,7 @@ import { clamp, damp, easeMove, lerp } from '../core/math';
 import { Transmutation } from './transmute/Transmutation';
 import { GooeySlider } from './GooeySlider';
 import { Atmosphere } from './Atmosphere';
+import { InspectSheet } from './InspectSheet';
 import { ViewSwitch } from '../ui/ViewSwitch';
 import { Flap } from '../ui/Flap';
 import { CursorTag } from '../ui/CursorTag';
@@ -103,6 +104,9 @@ export class Exhibition {
   private readonly nav: LiquidNav;
   /** … and its rendering, with live thumbnails (WebGL). */
   private readonly slider: GooeySlider | null;
+  /** Inspect: the stage specimen close up, turnable, with its sheet pinned to it. */
+  inspecting = false;
+  private readonly sheet: InspectSheet | null;
   /** Contextual tag next to the pointer, and the card under it (grid). */
   private readonly cursor: CursorTag;
   private cardHover: number | null = null;
@@ -159,6 +163,7 @@ export class Exhibition {
     this.morph?.prepare(this.stageRadius());
     this.slider = engine ? new GooeySlider(engine, specimens, this.nav) : null;
     this.atmosphere = engine ? new Atmosphere(engine, specimens) : null;
+    this.sheet = engine ? new InspectSheet(engine, engine.reducedMotion, this.tick) : null;
     this.setTint(this.mode === 'gallery' ? this.selected : null);
     this.measureNav();
     if (engine) engine.onLayout = (dt) => this.layout(dt);
@@ -237,6 +242,13 @@ export class Exhibition {
 
   private bind(): void {
     qs('.g-scan', this.root).addEventListener('click', () => this.scan(this.selected));
+    qs('.g-inspect', this.root).addEventListener('click', () => this.enterInspect());
+    // a click on empty space closes Inspect
+    window.addEventListener('pointerup', (e) => {
+      if (!this.inspecting || !this.engine || this.engine.hovered || this.engine.pointer.travel > 6) return;
+      if ((e.target as HTMLElement).closest?.('button, a')) return;
+      this.exitInspect();
+    });
     qs('.g-next', this.root).addEventListener('click', () => this.step(1));
     qs('.g-prev', this.root).addEventListener('click', () => this.step(-1));
 
@@ -258,7 +270,12 @@ export class Exhibition {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const tag = (e.target as HTMLElement).tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-      if (this.mode === 'gallery' && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+      if (e.key === 'Escape') {
+        this.exitInspect();
+      } else if (e.key === 'i' || e.key === 'I') {
+        if (this.inspecting) this.exitInspect();
+        else this.enterInspect();
+      } else if (this.mode === 'gallery' && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
         e.preventDefault();
         this.step(e.key === 'ArrowRight' ? 1 : -1);
       } else if (e.key === 's' || e.key === 'S') {
@@ -414,6 +431,7 @@ export class Exhibition {
     for (let i = 0; i < this.anchors.length; i++) {
       const a = this.anchors[i];
       if (this.mode === 'grid' || this.fading.has(i)) this.rectOf(this.ellipseEls[i], a);
+      else if (this.inspecting && i === this.selected) this.inspectAnchor(a);
       else if (i === this.selected || this.hold.has(i)) this.rectOf(this.stageEl, a);
       else this.rectOf(this.dotEls[i], a, 0);
     }
@@ -426,6 +444,7 @@ export class Exhibition {
     this.measureAnchors();
     this.scrollResponse(dt);
     this.cursor.set(this.cursorContext());
+    this.sheet?.update(this.specimens[this.selected]);
     for (let i = 0; i < this.specimens.length; i++) {
       const s = this.specimens[i];
       const a = this.anchors[i];
@@ -481,6 +500,10 @@ export class Exhibition {
     if (!e || e.pointer.x < -1000) return null;
     const h = e.hovered;
     const onSpecimen = !!h && h.interactive && h.input.hit;
+    if (this.inspecting) {
+      if (h === this.specimens[this.selected] && h.input.pressed) return 'ROTATE';
+      return onSpecimen ? 'DRAG' : 'CLOSE';
+    }
     if (this.mode === 'grid') return onSpecimen || this.cardHover !== null ? 'OPEN' : null;
     if (onSpecimen && h === this.specimens[this.selected] && !this.morph?.running) return h.entry.verb;
     return null;
@@ -513,7 +536,7 @@ export class Exhibition {
     this.specimens.forEach((s, i) => {
       const onStage = this.mode === 'gallery' && i === this.selected && !morphing;
       s.interactive = this.mode === 'grid' || onStage;
-      s.tapAction = onStage;
+      s.tapAction = onStage && !this.inspecting;
     });
   }
 
@@ -588,6 +611,7 @@ export class Exhibition {
   /** Gallery → Grid: the stage specimen settles into its card; the others dissolve in, in place. */
   toGrid(): void {
     if (this.mode === 'grid') return;
+    this.exitInspect(true);
     this.pending = null;
     this.morph?.cancel();
     this.hold.forEach((i) => this.collapseToSlot(i));
@@ -748,6 +772,7 @@ export class Exhibition {
    */
   select(i: number): void {
     if (this.mode !== 'gallery') return this.toGallery(i);
+    if (this.inspecting) return;
     if (this.morph?.running) {
       this.pending = i === this.selected ? null : i;
       return;
@@ -818,6 +843,56 @@ export class Exhibition {
   private step(dir: number): void {
     const n = MATERIALS.length;
     this.select((this.selected + dir + n) % n);
+  }
+
+  // ── Inspect ────────────────────────────────────────────────────────────
+
+  /** Close up: centred in the viewport, larger than the stage. */
+  private inspectAnchor(a: ScreenCircle): void {
+    const e = this.engine!;
+    a.x = e.width / 2;
+    a.y = e.height * 0.5;
+    a.r = Math.min(e.width, e.height) * (e.width <= 760 ? 0.33 : 0.36);
+    a.z = 0;
+  }
+
+  /** The stage specimen comes forward; the gallery steps back; the sheet pins itself on. */
+  enterInspect(): void {
+    if (this.mode !== 'gallery' || this.inspecting || this.morph?.running || !this.engine) return;
+    this.inspecting = true;
+    const s = this.specimens[this.selected];
+    s.spinMode = true;
+    this.root.classList.add('is-inspecting');
+    this.applyInteractivity();
+    this.startTrack(this.selected, { duration: 1.1, lift: 0.12, ease: easeMove });
+    gsap.to(qsa('.g-name, .g-desc', this.gallery), { autoAlpha: 0, duration: 0.45, ease: 'power2.out', overwrite: true });
+    gsap.to(this.navEl, { autoAlpha: 0, y: 8, duration: 0.45, ease: 'power2.out', overwrite: true });
+    if (this.slider) gsap.to(this.slider.visibility, { value: 0, duration: 0.35, overwrite: true });
+    if (this.atmosphere) gsap.to(this.atmosphere.inspect, { value: 1, duration: 1.1, ease: 'power2.inOut', overwrite: true });
+    this.sheet?.show(MATERIALS[this.selected]);
+    this.sound.ui('switch');
+  }
+
+  /** Back to the stage, upright. `instant` when leaving the gallery altogether. */
+  exitInspect(instant = false): void {
+    if (!this.inspecting) return;
+    this.inspecting = false;
+    const s = this.specimens[this.selected];
+    s.spinMode = false;
+    s.resetSpin(instant ? 0 : 0.9);
+    this.root.classList.remove('is-inspecting');
+    this.applyInteractivity();
+    this.sheet?.hide();
+    if (this.atmosphere) gsap.to(this.atmosphere.inspect, { value: 0, duration: instant ? 0 : 0.9, ease: 'power2.inOut', overwrite: true });
+    if (instant) {
+      gsap.set(qsa('.g-name, .g-desc', this.gallery), { autoAlpha: 1 });
+      return;
+    }
+    this.startTrack(this.selected, { duration: 1.0, lift: -0.06, ease: easeMove });
+    gsap.to(qsa('.g-name, .g-desc', this.gallery), { autoAlpha: 1, duration: 0.6, delay: 0.35, ease: 'power2.out', overwrite: true });
+    gsap.to(this.navEl, { autoAlpha: 1, y: 0, duration: 0.6, delay: 0.4, ease: 'power2.out', overwrite: true });
+    if (this.slider) gsap.to(this.slider.visibility, { value: 1, duration: 0.6, delay: 0.45, overwrite: true });
+    this.sound.ui('switch');
   }
 
   /** A scan line sweeps the specimen and leaves its x-ray layer behind it. */

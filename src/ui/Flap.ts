@@ -2,7 +2,7 @@ import gsap from 'gsap';
 
 /** Glyphs flashed while a cell turns (all in the Akkurat Mono subset). */
 const GLYPHS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/';
-export const BLANK = ' ';
+export const BLANK = '\u00a0';
 
 export interface FlapOptions {
   /** Fixed number of cells (defaults to the first text's length). */

@@ -417,14 +417,72 @@ button {
   line-height: 1;
 }
 
-.g-scan {
+.g-scan,
+.g-inspect {
   opacity: 0.4;
   transition: opacity 0.3s;
 }
 
 .g-scan:hover,
-.g-scan:focus-visible {
+.g-scan:focus-visible,
+.g-inspect:hover,
+.g-inspect:focus-visible {
   opacity: 1;
+}
+
+/* Inspect sheet (exhibition/InspectSheet.ts): leader lines and readings pinned to the specimen */
+.om-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.om-sheet svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.om-sheet polyline {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.om-sheet-head {
+  position: absolute;
+  left: var(--pad);
+  bottom: var(--pad);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.om-sheet-hint {
+  opacity: 0.45;
+}
+
+.om-pin {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  will-change: transform, opacity;
+}
+
+.om-pin-label {
+  opacity: 0.45;
+}
+
+.om-pin-value {
+  font-size: max(11px, calc(9 * var(--u)));
 }
 
 .g-nav {

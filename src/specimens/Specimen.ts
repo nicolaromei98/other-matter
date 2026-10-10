@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import gsap from 'gsap';
 import common from '../shaders/common.glsl?raw';
 import noise from '../shaders/noise.glsl?raw';
 import env from '../shaders/env.glsl?raw';
@@ -69,6 +70,10 @@ const _v = new THREE.Vector3();
 const _sphere = new THREE.Sphere(new THREE.Vector3(), 1);
 const _plane = new THREE.Plane();
 const _n = new THREE.Vector3();
+const _qx = new THREE.Quaternion();
+const _qy = new THREE.Quaternion();
+const _X = new THREE.Vector3(1, 0, 0);
+const _Y = new THREE.Vector3(0, 1, 0);
 
 /**
  * Base class for every specimen.
@@ -104,6 +109,14 @@ export abstract class Specimen {
   tilt = 0;
   /** Contact shadow width relative to the body (wider when squashed). */
   shadowScale = 1;
+  /**
+   * Inspect: a drag turns the specimen like a ball under the fingers and it
+   * keeps turning after release, slowing down; its own reactions to the
+   * pointer pause meanwhile.
+   */
+  spinMode = false;
+  /** Angular velocity (rad/s) about the screen's x and y axes. */
+  readonly spinVel = new THREE.Vector2();
 
   hover = 0;
   press = 0;
@@ -265,8 +278,50 @@ export abstract class Specimen {
     u.uResAge.value = age;
     u.uRes.value = age < 0 ? 0 : Math.min(1, age / 0.06) * Math.exp(-age / (this.resDur * 0.45));
 
+    if (this.spinMode || this.spinVel.lengthSq() > 1e-6) this.spinStep(engine, dt);
+    if (this.spinMode) {
+      // the material sees a pointer that is only hovering: no press, drag or tap
+      const { pressed, justPressed, justReleased, tapped } = inp;
+      inp.pressed = inp.justPressed = inp.justReleased = inp.tapped = false;
+      _v.copy(inp.drag);
+      inp.drag.set(0, 0, 0);
+      this.step(f);
+      Object.assign(inp, { pressed, justPressed, justReleased, tapped });
+      inp.drag.copy(_v);
+      return;
+    }
     if (inp.tapped && this.tapAction) this.onTap();
     this.step(f);
+  }
+
+  /** Turn back upright (after Inspect): stop the inertia and ease the spin to rest. */
+  resetSpin(duration = 0.9): void {
+    this.spinVel.set(0, 0);
+    const from = this.spin.quaternion.clone();
+    const to = new THREE.Quaternion();
+    const t = { v: 0 };
+    gsap.to(t, {
+      v: 1,
+      duration,
+      ease: 'power3.inOut',
+      onUpdate: () => {
+        this.spin.quaternion.slerpQuaternions(from, to, t.v);
+      },
+    });
+  }
+
+  /** Inspect rotation: direct while dragged (screen px → radians on the body's radius), then inertia. */
+  private spinStep(engine: Engine, dt: number): void {
+    const p = engine.pointer;
+    if (this.spinMode && this.input.pressed && p.travel > 3) {
+      const r = Math.max(this.screen.r * this.fit, 40);
+      this.spinVel.set(p.vy / r, p.vx / r);
+    } else {
+      this.spinVel.multiplyScalar(Math.exp(-dt * 2.4));
+    }
+    _qx.setFromAxisAngle(_X, this.spinVel.x * dt);
+    _qy.setFromAxisAngle(_Y, this.spinVel.y * dt);
+    this.spin.quaternion.premultiply(_qy).premultiply(_qx);
   }
 
   /** Standard ShaderMaterial for a specimen surface. */
