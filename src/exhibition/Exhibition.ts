@@ -10,6 +10,8 @@ import { GooeySlider } from './GooeySlider';
 import { Atmosphere } from './Atmosphere';
 import { ViewSwitch } from '../ui/ViewSwitch';
 import { Flap } from '../ui/Flap';
+import { CursorTag } from '../ui/CursorTag';
+import { magnetic } from '../ui/Magnetic';
 import { LiquidNav } from './LiquidNav';
 
 type Mode = 'gallery' | 'grid';
@@ -101,6 +103,9 @@ export class Exhibition {
   private readonly nav: LiquidNav;
   /** … and its rendering, with live thumbnails (WebGL). */
   private readonly slider: GooeySlider | null;
+  /** Contextual tag next to the pointer, and the card under it (grid). */
+  private readonly cursor: CursorTag;
+  private cardHover: number | null = null;
   /** Grid scroll response: smoothed page velocity (px/s) and the last scroll position. */
   private scrollVel = 0;
   private lastScrollY = 0;
@@ -128,8 +133,10 @@ export class Exhibition {
     // the archive grid is the landing view; ?view=gallery opens on the stage
     this.mode = params.get('view') === 'gallery' ? 'gallery' : 'grid';
 
+    this.cursor = new CursorTag(!!engine?.reducedMotion, this.tick);
     this.build();
     this.bind();
+    magnetic(qsa('.om-sound, .g-scan, .g-inspect, .sw-track', root));
     this.root.dataset.mode = this.mode;
     this.viewSwitch = new ViewSwitch(
       qs('.om-switch', root),
@@ -212,7 +219,13 @@ export class Exhibition {
         (el) => new Flap(el, el.textContent ?? '', { stagger: 0.03, reducedMotion: this.reduced, onLand: this.tick }),
       );
       this.cardFlaps.push(flaps);
-      card.addEventListener('pointerenter', () => flaps.forEach((f) => f.shuffle()));
+      card.addEventListener('pointerenter', () => {
+        this.cardHover = i;
+        flaps.forEach((f) => f.shuffle());
+      });
+      card.addEventListener('pointerleave', () => {
+        if (this.cardHover === i) this.cardHover = null;
+      });
     });
     this.codeFlap = new Flap(qs('.g-code', this.root), MATERIALS[this.selected].code, {
       reducedMotion: this.reduced,
@@ -412,6 +425,7 @@ export class Exhibition {
     this.nav.layout();
     this.measureAnchors();
     this.scrollResponse(dt);
+    this.cursor.set(this.cursorContext());
     for (let i = 0; i < this.specimens.length; i++) {
       const s = this.specimens[i];
       const a = this.anchors[i];
@@ -459,6 +473,17 @@ export class Exhibition {
       s.squash = clamp(Math.abs(sv) * 0.000045, 0, 0.09);
       s.tilt = clamp(sv * 0.00012, -0.2, 0.2);
     }
+  }
+
+  /** What the pointer would do here, for the cursor tag (null: nothing to say). */
+  private cursorContext(): string | null {
+    const e = this.engine;
+    if (!e || e.pointer.x < -1000) return null;
+    const h = e.hovered;
+    const onSpecimen = !!h && h.interactive && h.input.hit;
+    if (this.mode === 'grid') return onSpecimen || this.cardHover !== null ? 'OPEN' : null;
+    if (onSpecimen && h === this.specimens[this.selected] && !this.morph?.running) return h.entry.verb;
+    return null;
   }
 
   /** Vertical lag behind the card (px): deeper cards lag more, a slow parallax. */
