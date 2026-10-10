@@ -171,7 +171,7 @@ button {
 }
 
 /* "VIEW — GRID": states the current view and, greyed, previews the other one on hover.
-   The word is a row of split-flap cells turned by ViewSwitch. */
+   The word is a row of split-flap cells (.flap) turned by ViewSwitch. */
 .om-view {
   display: inline-flex;
   align-items: baseline;
@@ -183,19 +183,19 @@ button {
   color: #9a9a9a;
 }
 
-.om-view-v {
+/* Split-flap text (ui/Flap.ts): one monospace cell per letter, turning about its horizontal axis */
+.flap {
   display: inline-flex;
   perspective: 9em;
+  white-space: pre;
 }
 
-/* one monospace cell per letter, turning about its horizontal axis */
-.om-view-v > span {
+.flap > span {
   display: inline-block;
   width: 1ch;
   text-align: center;
   transform-origin: 50% 55%;
   backface-visibility: hidden;
-  will-change: transform, opacity;
 }
 
 .sw-track {
@@ -349,6 +349,11 @@ button {
   grid-area: 1 / 1;
   align-self: center;
   justify-self: start;
+}
+
+.g-code {
+  margin-bottom: max(10px, calc(14 * var(--u)));
+  opacity: 0.55;
 }
 
 .g-title {

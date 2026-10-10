@@ -8,6 +8,7 @@ import { easeMove, lerp } from '../core/math';
 import { Transmutation } from './transmute/Transmutation';
 import { GooeySlider } from './GooeySlider';
 import { ViewSwitch } from '../ui/ViewSwitch';
+import { Flap } from '../ui/Flap';
 import { LiquidNav } from './LiquidNav';
 
 type Mode = 'gallery' | 'grid';
@@ -75,6 +76,9 @@ export class Exhibition {
   private readonly cardEls: HTMLElement[] = [];
   private readonly ellipseEls: HTMLElement[] = [];
   private readonly viewSwitch: ViewSwitch;
+  /** Split-flap codes: the gallery's, and each card's (decoded on hover). */
+  private codeFlap!: Flap;
+  private readonly cardFlaps: Flap[][] = [];
 
   private readonly anchors: ScreenCircle[] = MATERIALS.map(() => ({ x: 0, y: 0, r: 0, z: 0 }));
   private readonly tracks: Track[] = MATERIALS.map(() => ({ from: { x: 0, y: 0, r: 0, z: 0 }, t: 1, lift: 0, arc: 0, logScale: true, to: null }));
@@ -126,6 +130,7 @@ export class Exhibition {
       this.mode,
       (mode) => (mode === 'grid' ? this.toGrid() : this.toGallery()),
       !!engine?.reducedMotion,
+      this.tick,
     );
     this.syncDots();
     this.setGalleryText(this.selected);
@@ -195,6 +200,15 @@ export class Exhibition {
       grid.appendChild(card);
       this.cardEls.push(card);
       this.ellipseEls.push(qs('.card-ellipse', card));
+      const flaps = [qs('.card-id .ln > span', card), qs('.card-spec .ln > span', card)].map(
+        (el) => new Flap(el, el.textContent ?? '', { stagger: 0.03, reducedMotion: this.reduced, onLand: this.tick }),
+      );
+      this.cardFlaps.push(flaps);
+      card.addEventListener('pointerenter', () => flaps.forEach((f) => f.shuffle()));
+    });
+    this.codeFlap = new Flap(qs('.g-code', this.root), MATERIALS[this.selected].code, {
+      reducedMotion: this.reduced,
+      onLand: this.tick,
     });
     this.stageEl.style.setProperty('--fb1', MATERIALS[this.selected].fallback[0]);
     this.stageEl.style.setProperty('--fb2', MATERIALS[this.selected].fallback[1]);
@@ -206,8 +220,13 @@ export class Exhibition {
     qs('.g-prev', this.root).addEventListener('click', () => this.step(-1));
 
     const soundBtn = qs<HTMLButtonElement>('.om-sound', this.root);
+    const soundFlap = new Flap(qs('.om-sound-v', soundBtn), this.sound.enabled ? 'ON' : 'OFF', {
+      cells: 3,
+      reducedMotion: this.reduced,
+      onLand: this.tick,
+    });
     const renderSound = (on: boolean) => {
-      soundBtn.textContent = on ? 'SOUND — ON' : 'SOUND — OFF';
+      soundFlap.set(on ? 'ON' : 'OFF');
       soundBtn.setAttribute('aria-pressed', String(on));
     };
     renderSound(this.sound.enabled);
@@ -270,6 +289,13 @@ export class Exhibition {
     history.replaceState(null, '', `${location.pathname}?${p.toString()}`);
   }
 
+  /** Split-flap landing sound (rate-limited in Sound). */
+  private readonly tick = (): void => this.sound.tick();
+
+  private get reduced(): boolean {
+    return !!this.engine?.reducedMotion;
+  }
+
   private galleryMarkup(m: MaterialEntry): [string, string] {
     return [ln(`<b>${m.name}</b>`) + ln(m.classification), ln(m.short)];
   }
@@ -284,9 +310,10 @@ export class Exhibition {
     return qsa('.g-title .ln > span, .g-short .ln > span', this.gallery);
   }
 
-  /** Masked text swap: old lines leave upward, new lines rise in. */
+  /** Masked text swap: old lines leave upward, new lines rise in; the code flaps over. */
   private swapGalleryText(i: number): void {
     const token = ++this.textToken;
+    this.codeFlap.set(MATERIALS[i].code);
     const old = this.galleryLines();
     gsap.killTweensOf(old);
     gsap.to(old, {
@@ -577,6 +604,7 @@ export class Exhibition {
     }
     this.textToken++;
     this.setGalleryText(this.selected);
+    this.codeFlap.set(MATERIALS[this.selected].code, true);
     this.mode = 'gallery';
     this.syncSwitch();
     this.syncUrl();

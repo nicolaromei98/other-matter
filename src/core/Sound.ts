@@ -294,6 +294,18 @@ export class Sound {
     return 0;
   }
 
+  private lastTick = 0;
+
+  /** A split-flap cell landing: a tiny, dry click (at most one every 28 ms). */
+  tick(): void {
+    if (!this.ready) return;
+    const now = this.ctx!.currentTime;
+    if (now - this.lastTick < 0.028) return;
+    this.lastTick = now;
+    const out = this.bus(0.35, 0.05, (Math.random() - 0.5) * 0.3);
+    this.hiss(out, now + 0.002, 0.025, 0.05, 'highpass', 5200, 4200, 0.7, 0.002);
+  }
+
   /** Interface sounds: mode switch (soft whoosh) and specimen selection (tick). */
   ui(kind: 'switch' | 'select'): void {
     if (!this.ready) return;
