@@ -80,6 +80,8 @@ const _n = new THREE.Vector3();
 export abstract class Specimen {
   readonly group = new THREE.Group();
   readonly body = new THREE.Group();
+  /** Between the layout and the body: user rotation (Inspect drag, with inertia). */
+  readonly spin = new THREE.Group();
   readonly entry: MaterialEntry;
 
   /** Where the layout wants it on screen (CSS px). Written by the exhibition. */
@@ -96,6 +98,12 @@ export abstract class Specimen {
   opacity = 1;
   /** Keep updating uniforms while invisible (it is being captured offscreen). */
   keepAlive = false;
+  /** Scroll response in the grid: + stretches along the scroll, − squashes. */
+  squash = 0;
+  /** Scroll response in the grid: forward/back tilt, radians. */
+  tilt = 0;
+  /** Contact shadow width relative to the body (wider when squashed). */
+  shadowScale = 1;
 
   hover = 0;
   press = 0;
@@ -127,7 +135,8 @@ export abstract class Specimen {
     this.entry = entry;
     this.ctx = ctx;
     this.u = createSpecimenUniforms(ctx.globals);
-    this.group.add(this.body);
+    this.group.add(this.spin);
+    this.spin.add(this.body);
     this.group.visible = false;
   }
 
@@ -178,7 +187,10 @@ export abstract class Specimen {
     this.u.uOpacity.value = this.opacity;
     if (!onScreen) return;
     engine.screenToWorld(s.x, s.y, s.z, this.group.position);
-    this.group.scale.setScalar(Math.max(s.r * this.fit, 1e-3));
+    const k = Math.max(s.r * this.fit, 1e-3);
+    this.group.scale.set(k * (1 - this.squash * 0.5), k * (1 + this.squash), k);
+    this.group.rotation.x = this.tilt;
+    this.shadowScale = 1 - this.squash * 0.5;
     this.lod(s.r);
   }
 

@@ -7,6 +7,7 @@ import type { Specimen } from '../specimens/Specimen';
 import { easeMove, lerp } from '../core/math';
 import { Transmutation } from './transmute/Transmutation';
 import { GooeySlider } from './GooeySlider';
+import { Atmosphere } from './Atmosphere';
 import { ViewSwitch } from '../ui/ViewSwitch';
 import { Flap } from '../ui/Flap';
 import { LiquidNav } from './LiquidNav';
@@ -100,6 +101,8 @@ export class Exhibition {
   private readonly nav: LiquidNav;
   /** … and its rendering, with live thumbnails (WebGL). */
   private readonly slider: GooeySlider | null;
+  /** Contact shadows, vignette and grain (WebGL). */
+  readonly atmosphere: Atmosphere | null;
 
   constructor(
     root: HTMLElement,
@@ -145,6 +148,8 @@ export class Exhibition {
     this.morph = engine ? new Transmutation(engine) : null;
     this.morph?.prepare(this.stageRadius());
     this.slider = engine ? new GooeySlider(engine, specimens, this.nav) : null;
+    this.atmosphere = engine ? new Atmosphere(engine, specimens) : null;
+    this.setTint(this.mode === 'gallery' ? this.selected : null);
     this.measureNav();
     if (engine) engine.onLayout = (dt) => this.layout(dt);
   }
@@ -294,6 +299,11 @@ export class Exhibition {
 
   private get reduced(): boolean {
     return !!this.engine?.reducedMotion;
+  }
+
+  /** The page takes a whisper of the colour of the specimen on the stage (white in the grid). */
+  private setTint(i: number | null): void {
+    document.documentElement.style.setProperty('--bg', i === null ? '#ffffff' : MATERIALS[i].tint);
   }
 
   private galleryMarkup(m: MaterialEntry): [string, string] {
@@ -534,6 +544,7 @@ export class Exhibition {
     const onCard = new Set(this.fading);
     this.fading.clear();
     this.mode = 'grid';
+    this.setTint(null);
     this.syncSwitch();
     this.syncUrl();
     this.sound.ui('switch');
@@ -606,6 +617,7 @@ export class Exhibition {
     this.setGalleryText(this.selected);
     this.codeFlap.set(MATERIALS[this.selected].code, true);
     this.mode = 'gallery';
+    this.setTint(this.selected);
     this.syncSwitch();
     this.syncUrl();
     this.sound.ui('switch');
@@ -703,6 +715,7 @@ export class Exhibition {
     this.sound.ui('select');
     this.swapGalleryText(i);
     this.nav.select(i);
+    this.setTint(i);
 
     // the new material comes in from the side the slider moves to (as its droplet does)
     const done = this.morph!.run(this.specimens[prev], this.specimens[i], {
