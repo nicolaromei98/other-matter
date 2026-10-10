@@ -4,7 +4,7 @@ import type { Engine } from '../core/Engine';
 import type { Sound } from '../core/Sound';
 import type { ScreenCircle } from '../core/types';
 import type { Specimen } from '../specimens/Specimen';
-import { easeMove, lerp } from '../core/math';
+import { clamp, damp, easeMove, lerp } from '../core/math';
 import { Transmutation } from './transmute/Transmutation';
 import { GooeySlider } from './GooeySlider';
 import { Atmosphere } from './Atmosphere';
@@ -101,6 +101,9 @@ export class Exhibition {
   private readonly nav: LiquidNav;
   /** … and its rendering, with live thumbnails (WebGL). */
   private readonly slider: GooeySlider | null;
+  /** Grid scroll response: smoothed page velocity (px/s) and the last scroll position. */
+  private scrollVel = 0;
+  private lastScrollY = 0;
   /** Contact shadows, vignette and grain (WebGL). */
   readonly atmosphere: Atmosphere | null;
 
@@ -405,9 +408,10 @@ export class Exhibition {
 
   // ── Per-frame layout ───────────────────────────────────────────────────
 
-  private layout(_dt: number): void {
+  private layout(dt: number): void {
     this.nav.layout();
     this.measureAnchors();
+    this.scrollResponse(dt);
     for (let i = 0; i < this.specimens.length; i++) {
       const s = this.specimens[i];
       const a = this.anchors[i];
@@ -416,7 +420,7 @@ export class Exhibition {
       const e = tr.t;
       if (e >= 1) {
         out.x = a.x;
-        out.y = a.y;
+        out.y = a.y + this.scrollLag(i);
         out.r = a.r * this.fx[i].scale;
         out.z = 0;
         continue;
@@ -437,6 +441,30 @@ export class Exhibition {
       out.z = lerp(f.z, 0, e) + s1 * tr.lift * Math.max(f.r, b.r);
     }
     this.hoverSounds();
+  }
+
+  /**
+   * Grid only, user scrolling only (not the scroll a transition drives): the
+   * specimens lag a little behind their cards, each at its own depth, and
+   * stretch and tip with the speed, settling back when the page stops.
+   */
+  private scrollResponse(dt: number): void {
+    const y = window.scrollY;
+    const v = (y - this.lastScrollY) / Math.max(dt, 1 / 240);
+    this.lastScrollY = y;
+    const live = this.mode === 'grid' && !this.root.classList.contains('is-transitioning') && !this.reduced;
+    this.scrollVel = damp(this.scrollVel, live ? clamp(v, -4000, 4000) : 0, 7, dt);
+    const sv = this.scrollVel;
+    for (const s of this.specimens) {
+      s.squash = clamp(Math.abs(sv) * 0.000045, 0, 0.09);
+      s.tilt = clamp(sv * 0.00012, -0.2, 0.2);
+    }
+  }
+
+  /** Vertical lag behind the card (px): deeper cards lag more, a slow parallax. */
+  private scrollLag(i: number): number {
+    const depth = 0.7 + 0.15 * ((i * 3) % 5);
+    return clamp(this.scrollVel * 0.014 * depth, -24, 24);
   }
 
   /** Hover enter on a live specimen plays its voice; the material resonates with it. */
