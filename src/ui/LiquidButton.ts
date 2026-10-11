@@ -8,9 +8,13 @@
  * hover plays alone). Fine pointers only; off with reduced motion.
  */
 export function liquidButton(button: HTMLElement): void {
-  if (!matchMedia('(pointer: fine)').matches || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const blob = button.querySelector<HTMLElement>('.button-038__blob');
   if (!blob) return;
+  // off: drop the blob, or it would sit on the pill's top-left corner (where its CSS puts it)
+  if (!matchMedia('(pointer: fine)').matches || matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    blob.remove();
+    return;
+  }
 
   /** The pull starts this far from the edge and is full at FULL px. */
   const ZONE = 14;

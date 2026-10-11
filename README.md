@@ -221,14 +221,22 @@ context suspends while the page is hidden.
 - Micro-detail is gated by on-screen size (`uDetail`), march steps and
   octaves drop on the low tier, and off-screen specimens are hidden and skip their
   update.
-- DPR follows the screen up to 2 on desktop (1.5 on the low tier): the canvas
-  holds the slider's liquid edges and icons next to crisp DOM text, and below the
-  native density they turned soft. Fragment cost grows with its square (at
-  1512×945, 2× costs ~5–5.5 ms per frame against ~3.5–4 ms at 1.5×). It steps
-  down by 0.25 (to 1 / 0.75) when frames stay under ~50 fps for about two seconds
-  of drawing. Stalls over 100 ms (shader compiles, texture uploads, tab switches)
-  don't count, nor do the first 4 s or the 1.5 s after the tab comes back:
-  before, a few loading hitches halved the resolution for the whole visit.
+- DPR follows the screen up to 2 on desktop (1.25 on the low tier, i.e. phones):
+  the canvas holds the slider's liquid edges and icons next to crisp DOM text,
+  and below the native density they turned soft. Fragment cost grows with its
+  square (at 1512×945, 2× costs ~5–5.5 ms per frame against ~3.5–4 ms at 1.5×).
+  It steps down by 0.25 (to 1 / 0.75) when frames stay under ~50 fps for about
+  two seconds of drawing (one on phones, where a missed frame is a stutter in
+  the scroll). Stalls over 100 ms (shader compiles, texture uploads, tab
+  switches) don't count, nor do the first 4 s or the 1.5 s after the tab comes
+  back: before, a few loading hitches halved the resolution for the whole visit.
+- Mobile toolbars (`core/viewport.ts`). Browsers fire `resize` whenever their
+  toolbars slide in or out mid-scroll. The canvas covers the large viewport
+  (`100lvh`) and the gallery fits the small one (`svh`), and layout only re-runs
+  on a real change (width, rotation), so scrolling never resizes the canvas or
+  reallocates render targets. A finger has no position once lifted or taken
+  over by a scroll (`pointercancel`); before, the specimens scrolling under the
+  last touch point kept being hovered, heard and pressed.
 - Production builds minify the GLSL (`vite.config.ts`) and preload the four
   font files visible on first paint. Sound samples load only after the first
   gesture. three.js is tree-shaken to the WebGL renderer (~132 kB gzip, its

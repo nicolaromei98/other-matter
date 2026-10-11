@@ -23,6 +23,8 @@ export class Pointer {
   private lastY = 0;
   private lastT = 0;
   hasMoved = false;
+  /** A touch ended or turned into a scroll: forget its position after this frame. */
+  private lifted = false;
 
   constructor() {
     const opts = { passive: true } as const;
@@ -62,7 +64,11 @@ export class Pointer {
     this.travel = 0;
   };
 
-  private onUp = () => {
+  private onUp = (e?: Event) => {
+    // a finger has no position once lifted, or once the browser takes it over to
+    // scroll (pointercancel): left where it was, everything scrolling under that
+    // point would keep being hovered, heard and pressed
+    if ((e as PointerEvent | undefined)?.pointerType === 'touch') this.lifted = true;
     if (!this.down) return;
     this.down = false;
     this.releasedThisFrame = true;
@@ -78,6 +84,12 @@ export class Pointer {
   endFrame(dt: number): void {
     this.pressedThisFrame = false;
     this.releasedThisFrame = false;
+    if (this.lifted) {
+      // after the release frame, so a tap still lands where it was
+      this.lifted = false;
+      this.x = this.y = -9999;
+      this.hasMoved = false;
+    }
     // velocity relaxes toward zero when the pointer stops producing events
     const k = Math.exp(-dt * 6);
     this.vx *= k;

@@ -15,6 +15,7 @@ import { LiquidCursor } from '../ui/LiquidCursor';
 import { initButton038 } from '../ui/Button038';
 import { liquidButton } from '../ui/LiquidButton';
 import { LiquidNav } from './LiquidNav';
+import { onViewportChange, smallHeight } from '../core/viewport';
 
 type Mode = 'gallery' | 'grid';
 
@@ -309,7 +310,8 @@ export class Exhibition {
       this.measureNav();
       this.morph?.prepare(this.stageRadius());
     };
-    window.addEventListener('resize', onResize);
+    // width or real height changes only: mobile toolbars sliding in and out mid-scroll don't re-lay out
+    onViewportChange(onResize);
     document.fonts?.ready.then(onResize);
   }
 
@@ -410,7 +412,8 @@ export class Exhibition {
     const style = this.root.style;
     const top = this.stageArea.getBoundingClientRect().top + window.scrollY;
     const padBottom = parseFloat(getComputedStyle(this.root).paddingBottom) || 0;
-    const gh = Math.max(360, window.innerHeight - top - padBottom);
+    // fit the small viewport (toolbars shown), so it never changes while scrolling
+    const gh = Math.max(360, smallHeight() - top - padBottom);
     style.setProperty('--gallery-h', `${gh}px`);
     const vw = window.innerWidth;
     const mobile = vw <= 760;

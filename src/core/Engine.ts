@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import Lenis from 'lenis';
+import { largeHeight, onViewportChange } from './viewport';
 import gsap from 'gsap';
 import { Pointer } from './Pointer';
 import { damp } from './math';
@@ -65,6 +66,8 @@ export class Engine {
   private readonly dprMin: number;
   private frameAvg = 1 / 60;
   private slowTime = 0;
+  /** Set when the viewport really changed (see viewport.ts): toolbars sliding in and out don't count. */
+  private sizeDirty = true;
   /** Seconds before slow frames count: loading, warm-up and intro first, then a moment after the tab returns. */
   private adaptHold = 4;
   private lastFrame = 0;
@@ -112,7 +115,7 @@ export class Engine {
     // The canvas carries the slider's liquid edges and icons and the specimens'
     // silhouettes, right next to crisp DOM text: render at the screen's own
     // density (up to 2x) and let adapt() step down only if frames stay slow.
-    const cap = opts.tier === 'high' ? 2 : 1.5;
+    const cap = opts.tier === 'high' ? 2 : 1.25;
     this.dpr = Math.min(window.devicePixelRatio || 1, cap);
     this.dprMin = opts.tier === 'high' ? 1 : 0.75;
 
@@ -126,6 +129,7 @@ export class Engine {
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) this.adaptHold = Math.max(this.adaptHold, 1.5);
     });
+    onViewportChange(() => (this.sizeDirty = true));
     this.resize();
     if (!this.pointer.fine) this.listenTilt();
   }
@@ -195,8 +199,12 @@ export class Engine {
   }
 
   private resize(): void {
+    if (!this.sizeDirty) return;
+    this.sizeDirty = false;
+    // the canvas covers the large viewport: on phones the browser toolbars slide
+    // over it instead of resizing it (and reallocating it) mid-scroll
     const w = window.innerWidth;
-    const h = window.innerHeight;
+    const h = largeHeight();
     if (w === this.width && h === this.height) return;
     this.width = w;
     this.height = h;
@@ -228,7 +236,8 @@ export class Engine {
     this.frameAvg += (elapsedMs / 1000 - this.frameAvg) * 0.08;
     if (this.frameAvg > 1 / 50) this.slowTime += dt;
     else this.slowTime = Math.max(0, this.slowTime - dt * 0.5);
-    if (this.slowTime > 2 && this.dpr > this.dprMin) {
+    // phones step down sooner: there a missed frame shows as a stutter in the scroll
+    if (this.slowTime > (this.tier === 'high' ? 2 : 1) && this.dpr > this.dprMin) {
       this.dpr = Math.max(this.dprMin, this.dpr - 0.25);
       this.renderer.setPixelRatio(this.dpr);
       this.renderer.setSize(this.width, this.height, true);

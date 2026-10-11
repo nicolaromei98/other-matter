@@ -1,5 +1,6 @@
 import gsap from 'gsap';
 import { Flap } from './Flap';
+import { onViewportChange } from '../core/viewport';
 
 type Mode = 'gallery' | 'grid';
 
@@ -94,7 +95,7 @@ export class ViewSwitch {
       this.pick(this.mode === 'grid' ? 'gallery' : 'grid');
       this.button(this.mode).focus();
     });
-    window.addEventListener('resize', () => this.set(this.mode, true));
+    onViewportChange(() => this.set(this.mode, true));
     this.set(mode, true);
   }
 
