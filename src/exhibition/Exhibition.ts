@@ -720,6 +720,8 @@ export class Exhibition {
 
     gsap.killTweensOf(this.galleryLines());
     gsap.to(this.galleryLines(), { yPercent: -110, duration: 0.45, ease: 'power3.in', stagger: 0.03 });
+    // the code isn't line-masked: it fades with the lines (else it stays until the gallery hides)
+    gsap.to(this.codeFlap.el, { autoAlpha: 0, duration: 0.3, ease: 'power2.in', overwrite: true });
     gsap.to(this.navEl, { autoAlpha: 0, y: 8, duration: 0.4, ease: 'power2.in', overwrite: true });
     gsap.to(this.galleryButtons(), { autoAlpha: 0, duration: 0.3, ease: 'power2.in', overwrite: true });
     if (this.slider) gsap.to(this.slider.visibility, { value: 0, duration: 0.3, ease: 'power2.in', overwrite: true });
@@ -832,6 +834,7 @@ export class Exhibition {
 
     gsap.set(this.galleryLines(), { yPercent: 110 });
     gsap.fromTo(this.galleryLines(), { yPercent: 110 }, { yPercent: 0, duration: 0.95, ease: 'power4.out', stagger: 0.06, delay: 0.7 });
+    gsap.fromTo(this.codeFlap.el, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.6, delay: 0.7, ease: 'power2.out', overwrite: true });
     gsap.fromTo(this.navEl, { autoAlpha: 0, y: 8 }, { autoAlpha: 1, y: 0, duration: 0.7, delay: 0.75, overwrite: true });
     this.showGalleryButtons(0.85);
     if (this.slider) gsap.fromTo(this.slider.visibility, { value: 0 }, { value: 1, duration: 0.7, delay: 0.8, overwrite: true });

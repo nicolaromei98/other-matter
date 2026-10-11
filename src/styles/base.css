@@ -491,9 +491,10 @@ button {
   justify-self: start;
 }
 
+/* dimmed by colour, not opacity: the transitions fade it with autoAlpha */
 .g-code {
   margin-bottom: max(10px, calc(14 * var(--u)));
-  opacity: 0.55;
+  color: color-mix(in srgb, var(--ink) 55%, transparent);
 }
 
 .g-title {
