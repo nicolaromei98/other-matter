@@ -132,9 +132,9 @@ specimens and new structure appears inside transparent ones.
 | | Look | Pointer | Signature |
 |---|---|---|---|
 | **OM—001 Aerogel Skin** | pearl membrane; pink, coral, lilac and pale-blue clouds marched inside along the refracted ray | pressure dent with a displaced bulge; drag stretches it (spring) | light and colour moving through a volume |
-| **OM—002 Memory Glass** | black liquid glass, silver reflections, orange inclusions merging in a curling flow, suspended droplets | hover and drag write a 3D trail; the surface presses and rings, the inclusions are pushed | a memory field that relaxes over about 9 s |
+| **OM—002 Memory Glass** | two lobed, granular cells (cyan-blue, teal-green) caught dividing inside a figure-of-eight membrane of clear liquid glass; lobes are a smooth max of spheres seen from each cell's centre, so they meet in soft creases | hover and drag write a 3D trail; the glass presses and rings, the cells dent where touched | a memory field that relaxes over about 9 s |
 | **OM—003 Thermal Foam** | blue-silver liquid chrome, liquid-crystal film bands, translucent windows with bubbles | the cursor is a heat source: diffusing heat swells it, softens reflections and shifts colour | temperature spreading through the material |
-| **OM—004 Dust Silk** | ~18k cyan fibres and dust in one draw call, inside a faint boundary | local force field; a tap disperses everything | disperse and reconstruct along a curl-noise flow |
+| **OM—004 Dust Silk** | ~74k grains on crumpled, torn sheets (white on the crests, slate in the folds, lit by each sheet's normal), turquoise clusters glowing through the tears; each grain a lit bead, out-of-focus grains open into bokeh discs | the cursor opens a hollow; a tap disperses everything | disperse and reconstruct, the folds breathing in a slow field |
 | **OM—005 Liquid Stone** | graphite and violet mineral, flow-mapped strata, garnet translucency, polished highlights | heavy, late pressure that bends the inner flow; a click or drag opens light seams | fracture and heal along its own grain |
 | **OM—006 Bio Lens** | clear hydrogel, three-channel dispersion, inner focusing core, iris ring, traced bubbles | the core and the lens follow the cursor; a tap pulls focus (spring overshoot) | looking through a living optic |
 
@@ -207,7 +207,8 @@ context suspends while the page is hidden.
 ## Performance
 
 - One context, one scene, one render pass, no post-processing. Draw calls are
-  about 7–8 (six bodies, the Dust Silk boundary and its points).
+  about 10 (six bodies; Dust Silk draws its grains twice, sharp then blurred;
+  Memory Glass draws its cells and the membrane's far and near sides).
 - Picking is analytic (ray against a sphere in local space): no proxy meshes and no
   Raycaster traversal.
 - LOD, by on-screen radius: the dense mesh only on the stage (≥ 180 px), a
