@@ -18,6 +18,7 @@ import { LiquidNav } from './LiquidNav';
 import { onViewportChange, smallHeight } from '../core/viewport';
 import { HandTracker } from '../core/HandTracker';
 import { HandPanel } from '../ui/HandPanel';
+import { HandCoach } from '../ui/HandCoach';
 
 type Mode = 'gallery' | 'grid';
 
@@ -120,6 +121,7 @@ export class Exhibition {
   /** Webcam hand tracking (off until asked for) and its window. */
   private readonly hands: HandTracker | null;
   private readonly handPanel: HandPanel | null;
+  private readonly coach: HandCoach | null;
   private handWas = false;
   private lastImpact = -10;
   /** Grid scroll response: smoothed page velocity (px/s) and the last scroll position. */
@@ -152,6 +154,7 @@ export class Exhibition {
     this.cursor = new LiquidCursor(!!engine?.reducedMotion, this.tick);
     this.hands = engine && 'mediaDevices' in navigator ? new HandTracker() : null;
     this.handPanel = this.hands ? new HandPanel(this.hands) : null;
+    this.coach = this.hands ? new HandCoach() : null;
     document.fonts?.ready.then(() => initButton038(root));
     liquidButton(qs('.g-inspect', root));
     this.hero = this.buildHero(!!engine?.reducedMotion);
@@ -290,6 +293,13 @@ export class Exhibition {
       let back = 0;
       hands.onStatus((s) => {
         window.clearTimeout(back);
+        if (s === 'on') {
+          // the gestures act on the specimen on the stage: go there, and show how
+          if (this.mode === 'grid') this.toGallery();
+          this.coach?.start();
+        } else if (s !== 'loading') {
+          this.coach?.stop();
+        }
         handBtn.setAttribute('aria-pressed', String(s === 'on' || s === 'loading'));
         if (s === 'denied' || s === 'error') {
           // no camera (or no permission): say so, then settle back on OFF
@@ -488,7 +498,7 @@ export class Exhibition {
   // ── Per-frame layout ───────────────────────────────────────────────────
 
   private layout(dt: number): void {
-    this.handStep();
+    this.handStep(dt);
     this.nav.layout();
     this.measureAnchors();
     this.scrollResponse(dt);
@@ -550,13 +560,14 @@ export class Exhibition {
    * more; when the hand leaves the frame everything reforms and the mouse has
    * the pointer back.
    */
-  private handStep(): void {
+  private handStep(dt: number): void {
     const t = this.hands;
     const e = this.engine;
     if (!t || !e) return;
-    this.handPanel?.frame();
+    this.handPanel?.frame(dt);
     const h = t.hand;
     const on = t.active && h.present;
+    let struck = false;
     if (on) {
       e.pointer.drive(h.x, h.y);
       this.cursor.drive(h.x, h.y);
@@ -566,6 +577,8 @@ export class Exhibition {
       if (target && target.input.hit && h.speed > 1100 && now - this.lastImpact > 0.45) {
         target.impact(clamp((h.speed - 700) / 2000, 0.3, 1.5));
         this.lastImpact = now;
+        struck = true;
+        this.handPanel?.struck();
       }
     } else if (this.handWas) {
       e.pointer.release();
@@ -573,6 +586,9 @@ export class Exhibition {
       for (const s of this.specimens) s.fragmentTarget = 0;
     }
     this.handWas = on;
+    if (t.active && this.coach?.running) {
+      this.coach.update({ present: h.present, open: h.open, fragment: this.specimens[this.selected].fragment, struck }, dt);
+    }
   }
 
   /** What the pointer would do here, said by the liquid cursor (null: nothing to say). */

@@ -10,17 +10,29 @@ const BONES = [
   [0, 17],
 ];
 
+/** The gestures, as the legend lists them. */
+const GESTURES = [
+  ['PALM', 'STEERS'],
+  ['OPEN', 'BREAKS IT'],
+  ['SWIPE', 'STRIKES'],
+  ['OUT', 'REFORMS'],
+] as const;
+
 /**
  * The hand tracker's window, bottom-left while it is on: the camera, mirrored
  * and monochrome (it never leaves the device), the tracked hand drawn over
- * it, and a reading of what the hand is doing.
+ * it, a reading of what the hand is doing, and a legend of the gestures that
+ * lights up the ones being made (with a meter for how open the hand is).
  */
 export class HandPanel {
   private readonly el: HTMLElement;
   private readonly canvas: HTMLCanvasElement;
   private readonly g: CanvasRenderingContext2D;
   private readonly label: HTMLElement;
+  private readonly rows: HTMLElement[];
+  private readonly meter: HTMLElement;
   private text = '';
+  private strikeGlow = 0;
 
   constructor(private readonly tracker: HandTracker) {
     this.el = document.createElement('div');
@@ -34,7 +46,15 @@ export class HandPanel {
     view.append(tracker.video, this.canvas);
     this.label = document.createElement('span');
     this.label.className = 'om-label om-hand-state';
-    this.el.append(view, this.label);
+    const legend = document.createElement('div');
+    legend.className = 'om-hand-legend';
+    legend.innerHTML = GESTURES.map(
+      ([k, v], i) =>
+        `<span class="om-label om-hand-row"><b>${k}</b><span>${v}</span>${i === 1 ? '<i class="om-hand-meter"><i></i></i>' : ''}</span>`,
+    ).join('');
+    this.el.append(view, this.label, legend);
+    this.rows = [...legend.querySelectorAll<HTMLElement>('.om-hand-row')];
+    this.meter = legend.querySelector('.om-hand-meter > i') as HTMLElement;
     document.body.appendChild(this.el);
     this.g = this.canvas.getContext('2d')!;
     tracker.onStatus((s) => this.show(s));
@@ -51,11 +71,20 @@ export class HandPanel {
     this.label.textContent = t;
   }
 
-  /** Redraw the hand and the reading (each frame while tracking). */
-  frame(): void {
+  /** A strike landed: light its row for a moment. */
+  struck(): void {
+    this.strikeGlow = 1;
+  }
+
+  /** Redraw the hand, the reading and the legend (each frame while tracking). */
+  frame(dt: number): void {
     if (!this.tracker.active) return;
     const h = this.tracker.hand;
     this.say(h.present ? `PALM — OPEN ${String(Math.round(h.open * 100)).padStart(2, '0')}%` : 'NO HAND — REFORMING');
+    this.strikeGlow = Math.max(0, this.strikeGlow - dt * 1.5);
+    const on = [h.present, h.present && h.open > 0.3, this.strikeGlow > 0, !h.present];
+    this.rows.forEach((r, i) => r.classList.toggle('is-on', on[i]));
+    this.meter.style.transform = `scaleX(${h.present ? h.open.toFixed(3) : 0})`;
 
     const c = this.canvas;
     const dpr = Math.min(2, window.devicePixelRatio || 1);

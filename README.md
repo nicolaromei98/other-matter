@@ -60,7 +60,8 @@ src/
   exhibition/InspectSheet.ts Inspect: readings pinned to the specimen's surface
   ui/Flap.ts               split-flap text, used across the interface
   ui/LiquidCursor.ts       the pointer as a drop of liquid, with hover / press / word states
-  ui/HandPanel.ts          the hand tracker's window: mirrored camera, tracked hand, reading
+  ui/HandPanel.ts          the hand tracker's window: mirrored camera, tracked hand, reading, gesture legend
+  ui/HandCoach.ts          guided tour of the hand gestures, step by step
   ui/ViewSwitch.ts         Gallery / Grid segmented control
   ui/Button038.ts          Osmo Supply Button 038 (INSPECT SPECIMEN)
   ui/LiquidButton.ts       liquid attraction toward a nearby pointer for Button 038
@@ -191,8 +192,13 @@ flaring fibres, the stress network, or optical-power fringes.
   MediaPipe's Hand Landmarker runs on the device: frames never leave the
   browser; the library, its wasm runtime (jsDelivr, pinned to the npm version)
   and the model (Google's model storage) load the first time it is switched on.
-  A window bottom-left shows the mirrored camera in monochrome, the tracked hand
-  and a reading.
+  A window bottom-left shows the mirrored camera in monochrome, the tracked hand,
+  a reading, and a legend of the four gestures that lights up the ones being
+  made (with a meter for how open the hand is). Switching it on moves to the
+  gallery and, until it has been completed once, runs a guided tour
+  (`ui/HandCoach.ts`): one instruction at a time under the header (raise the
+  hand, make a fist, open it over the specimen, leave the frame, swipe through
+  it), each moving on only once the gesture has been made.
   - The palm is the interaction point: it drives the pointer (the liquid drop
     follows it) while a hand is in view; the mouse is ignored meanwhile.
   - The hand's speed is the impact: a fast pass through the stage specimen is a
