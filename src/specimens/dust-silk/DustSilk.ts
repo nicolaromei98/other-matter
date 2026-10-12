@@ -82,12 +82,33 @@ function grainCloud(scale: number): THREE.BufferGeometry {
 
   const pos = new Float32Array(total * 3);
   const nor = new Float32Array(total * 3);
+  const chunk = new Float32Array(total * 4);
+  // fragments: Voronoi cells around random seeds, so the pieces are irregular;
+  // each breaks away outward (from its seed), at its own speed
+  const seeds = Array.from({ length: 56 }, () => new THREE.Vector3().randomDirection().multiplyScalar(0.25 + Math.cbrt(Math.random()) * 0.8));
+  const pieces = seeds.map((c): [number, number, number, number] => {
+    const dir = c.clone().normalize().add(new THREE.Vector3().randomDirection().multiplyScalar(0.3)).normalize();
+    return [dir.x, dir.y, dir.z, Math.random()];
+  });
+  const chunkOf = (p: THREE.Vector3) => {
+    let best = 0;
+    let bd = Infinity;
+    for (let i = 0; i < seeds.length; i++) {
+      const d = seeds[i].distanceToSquared(p);
+      if (d < bd) {
+        bd = d;
+        best = i;
+      }
+    }
+    return pieces[best];
+  };
   const seed = new Float32Array(total * 4);
   const info = new Float32Array(total * 2);
   let k = 0;
   const put = (p: THREE.Vector3, nrm: THREE.Vector3, cavity: number, kind: number) => {
     pos.set([p.x, p.y, p.z], k * 3);
     nor.set([nrm.x, nrm.y, nrm.z], k * 3);
+    chunk.set(chunkOf(p), k * 4);
     seed.set([Math.random(), Math.random(), Math.random(), Math.random()], k * 4);
     info.set([cavity, kind], k * 2);
     k++;
@@ -157,6 +178,7 @@ function grainCloud(scale: number): THREE.BufferGeometry {
     const j = Math.floor(Math.random() * (i + 1));
     swap(pos, 3, i, j);
     swap(nor, 3, i, j);
+    swap(chunk, 4, i, j);
     swap(seed, 4, i, j);
     swap(info, 2, i, j);
   }
@@ -164,6 +186,7 @@ function grainCloud(scale: number): THREE.BufferGeometry {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   geo.setAttribute('aNormal', new THREE.BufferAttribute(nor, 3));
+  geo.setAttribute('aChunk', new THREE.BufferAttribute(chunk, 4));
   geo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 4));
   geo.setAttribute('aInfo', new THREE.BufferAttribute(info, 2));
   geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 2.2);
@@ -226,8 +249,8 @@ export default class DustSilk extends Specimen {
     this.uPointScale.value = sizePx === null ? (this.screen.r / 150) * this.pixelRatio : sizePx / 120;
   }
 
-  protected onTap(): void {
-    this.disperse.velocity += 3.6;
+  protected onTap(strength = 1): void {
+    this.disperse.velocity += 3.6 * strength;
   }
 
   protected step(f: Frame): void {

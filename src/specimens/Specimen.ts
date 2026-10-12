@@ -61,6 +61,8 @@ function createSpecimenUniforms(g: Engine['globals']) {
     uScan: { value: new THREE.Vector2(2, 0) },
     /** Hand-off opacity (particle transitions); 1 otherwise. */
     uOpacity: { value: 1 },
+    /** 0 whole … 1 broken apart (Specimen.fragment). */
+    uFragment: { value: 0 },
   };
 }
 
@@ -110,6 +112,12 @@ export abstract class Specimen {
   /** Contact shadow width relative to the body (wider when squashed). */
   shadowScale = 1;
   /**
+   * How far it is broken apart, 0…1 (an open hand, see HandTracker). Eases
+   * toward `fragmentTarget`: quickly when breaking, slowly when reforming.
+   */
+  fragment = 0;
+  fragmentTarget = 0;
+  /**
    * Inspect: a drag turns the specimen like a ball under the fingers and it
    * keeps turning after release, slowing down; its own reactions to the
    * pointer pause meanwhile.
@@ -157,8 +165,13 @@ export abstract class Specimen {
   abstract init(): void;
   /** Per-frame behaviour after input has been resolved. */
   protected abstract step(f: Frame): void;
-  /** Called when the pointer is released on the specimen without dragging (stage only). */
-  protected onTap(): void {}
+  /** Called when the pointer is released on the specimen without dragging (stage only), or on an impact. */
+  protected onTap(_strength = 1): void {}
+
+  /** A blow (a fast hand passing through it): its own tap action, scaled. */
+  impact(strength: number): void {
+    if (this.tapAction) this.onTap(strength);
+  }
   /** Swap geometry detail for the current on-screen radius. */
   protected lod(_radiusPx: number): void {}
   /** Adjust size-dependent uniforms while rendered by another camera (null = restore). */
@@ -269,6 +282,10 @@ export abstract class Specimen {
       pl.lerp(inp.local, 1 - Math.exp(-14 * dt));
     }
     u.uDetail.value = clamp((this.screen.r - 30) / 150);
+    const ft = this.fragmentTarget;
+    this.fragment = damp(this.fragment, ft, ft > this.fragment ? 5 : 1.4, dt);
+    if (this.fragment < 1e-4) this.fragment = 0;
+    u.uFragment.value = this.fragment;
 
     _v.copy(engine.camera.position);
     this.body.worldToLocal(_v);

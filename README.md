@@ -60,6 +60,7 @@ src/
   exhibition/InspectSheet.ts Inspect: readings pinned to the specimen's surface
   ui/Flap.ts               split-flap text, used across the interface
   ui/LiquidCursor.ts       the pointer as a drop of liquid, with hover / press / word states
+  ui/HandPanel.ts          the hand tracker's window: mirrored camera, tracked hand, reading
   ui/ViewSwitch.ts         Gallery / Grid segmented control
   ui/Button038.ts          Osmo Supply Button 038 (INSPECT SPECIMEN)
   ui/LiquidButton.ts       liquid attraction toward a nearby pointer for Button 038
@@ -67,6 +68,8 @@ src/
     Engine.ts             renderer, pixel-mapped camera, loop, picking, light field, adaptive DPR
     Sound.ts              Web Audio synthesis: one voice per material, reverb, mute
     Diagnostics.ts        HUD: fps, frame ms, draw calls, triangles, points, dpr
+    HandTracker.ts        webcam hand tracking (MediaPipe Hand Landmarker, on device)
+    viewport.ts           stable viewport heights under mobile toolbars
     Pointer.ts · math.ts · types.ts
   exhibition/
     Exhibition.ts         modes, selection, anchors, tracks, choreography, input
@@ -133,7 +136,7 @@ specimens and new structure appears inside transparent ones.
 |---|---|---|---|
 | **OM—001 Aerogel Skin** | pearl membrane; pink, coral, lilac and pale-blue clouds marched inside along the refracted ray | pressure dent with a displaced bulge; drag stretches it (spring) | light and colour moving through a volume |
 | **OM—002 Memory Glass** | two lobed, granular cells (cyan-blue, teal-green) caught dividing inside a figure-of-eight membrane of clear liquid glass; lobes are a smooth max of spheres seen from each cell's centre, so they meet in soft creases | hover and drag write a 3D trail; the glass presses and rings, the cells dent where touched | a memory field that relaxes over about 9 s |
-| **OM—003 Thermal Foam** | blue-silver liquid chrome, liquid-crystal film bands, translucent windows with bubbles | the cursor is a heat source: diffusing heat swells it, softens reflections and shifts colour | temperature spreading through the material |
+| **OM—003 Orbital Serum** | a green serum drop in a glass skin with a molecule suspended in a burst of chromatic glints, a halo of green matter; six glass capsules of yellow pollen (ray-marched) held in a ring by glass bonds, orbiting | the ring leans toward the pointer; dragging stirs it faster; a tap lets it open wide and draw back in | the orbit, the capsules' pollen drifting, the glints twinkling |
 | **OM—004 Dust Silk** | ~74k grains on crumpled, torn sheets (white on the crests, slate in the folds, lit by each sheet's normal), turquoise clusters glowing through the tears; each grain a lit bead, out-of-focus grains open into bokeh discs | the cursor opens a hollow; a tap disperses everything | disperse and reconstruct, the folds breathing in a slow field |
 | **OM—005 Liquid Stone** | graphite and violet mineral, flow-mapped strata, garnet translucency, polished highlights | heavy, late pressure that bends the inner flow; a click or drag opens light seams | fracture and heal along its own grain |
 | **OM—006 Bio Lens** | clear hydrogel, three-channel dispersion, inner focusing core, iris ring, traced bubbles | the core and the lens follow the cursor; a tap pulls focus (spring overshoot) | looking through a living optic |
@@ -184,7 +187,24 @@ flaring fibres, the stress network, or optical-power fringes.
   gallery code, card codes (they decode on hover), the cursor's word, the sheet.
   Each landing letter is a tiny, rate-limited click.
 - **Phones.** Tilting the device moves the studio light (iOS asks on first touch).
-- Keys: ← → specimens, I inspect, V view, ESC close.
+- **Hand tracking** (HAND — OFF in the header, or H; it asks for the camera).
+  MediaPipe's Hand Landmarker runs on the device: frames never leave the
+  browser; the library, its wasm runtime (jsDelivr, pinned to the npm version)
+  and the model (Google's model storage) load the first time it is switched on.
+  A window bottom-left shows the mirrored camera in monochrome, the tracked hand
+  and a reading.
+  - The palm is the interaction point: it drives the pointer (the liquid drop
+    follows it) while a hand is in view; the mouse is ignored meanwhile.
+  - The hand's speed is the impact: a fast pass through the stage specimen is a
+    blow (its own tap action, scaled by the speed).
+  - Opening the hand breaks the specimen under it apart (`Specimen.fragment`,
+    `uFragment`). Dust Silk splits into irregular chunks (Voronoi cells of its
+    grains), Orbital Serum's ring lets go of its capsules, Memory Glass's cells
+    divide further, Liquid Stone keeps cracking, Aerogel Skin swells and
+    crumples, and Bio Lens dilates and warps.
+  - Taking the hand out of frame lets everything reform, and the mouse gets
+    the pointer back.
+- Keys: ← → specimens, I inspect, V view, H hand tracking, ESC close.
 
 ## Sound
 

@@ -25,6 +25,8 @@ export class Pointer {
   hasMoved = false;
   /** A touch ended or turned into a scroll: forget its position after this frame. */
   private lifted = false;
+  /** Another input (the hand tracker) drives the pointer: mouse and touch moves are ignored meanwhile. */
+  external = false;
 
   constructor() {
     const opts = { passive: true } as const;
@@ -37,26 +39,45 @@ export class Pointer {
   }
 
   private onMove = (e: PointerEvent) => {
+    if (this.external) return;
+    this.moveTo(e.clientX, e.clientY);
+  };
+
+  /** Drive the pointer from another input (client px). */
+  drive(x: number, y: number): void {
+    this.external = true;
+    this.moveTo(x, y);
+  }
+
+  /** The other input is gone: the pointer leaves until the mouse moves again. */
+  release(): void {
+    if (!this.external) return;
+    this.external = false;
+    this.x = this.y = -9999;
+    this.hasMoved = false;
+  }
+
+  private moveTo(cx: number, cy: number): void {
     const now = performance.now();
     const dt = Math.max(1, now - this.lastT) / 1000;
     if (this.hasMoved) {
-      const ivx = (e.clientX - this.lastX) / dt;
-      const ivy = (e.clientY - this.lastY) / dt;
+      const ivx = (cx - this.lastX) / dt;
+      const ivy = (cy - this.lastY) / dt;
       this.vx += (ivx - this.vx) * 0.35;
       this.vy += (ivy - this.vy) * 0.35;
     }
-    this.lastX = this.x = e.clientX;
-    this.lastY = this.y = e.clientY;
+    this.lastX = this.x = cx;
+    this.lastY = this.y = cy;
     this.lastT = now;
     this.hasMoved = true;
     if (this.down) {
       this.travel = Math.max(this.travel, Math.hypot(this.x - this.downX, this.y - this.downY));
     }
-  };
+  }
 
   private onDown = (e: PointerEvent) => {
     if (e.button !== 0) return;
-    this.onMove(e);
+    if (!this.external) this.moveTo(e.clientX, e.clientY);
     this.down = true;
     this.pressedThisFrame = true;
     this.downX = e.clientX;

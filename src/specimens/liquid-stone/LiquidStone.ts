@@ -8,6 +8,7 @@ import { damp } from '../../core/math';
 
 const CRACK_N = 4;
 const CRACK_LIFE = 6;
+const _dir = new THREE.Vector3();
 
 /**
  * OM—005 LIQUID STONE
@@ -61,8 +62,8 @@ export default class LiquidStone extends Specimen {
     this.lastCrackT = t;
   }
 
-  protected onTap(): void {
-    if (this.input.hit) this.strike(this.input.local, 1, this.u.uTime.value);
+  protected onTap(strength = 1): void {
+    if (this.input.hit) this.strike(this.input.local, Math.min(1.4, strength), this.u.uTime.value);
   }
 
   protected step(f: Frame): void {
@@ -79,6 +80,10 @@ export default class LiquidStone extends Specimen {
     // dragging keeps fracturing along the path
     if (inp.pressed && inp.hit && inp.local.distanceTo(this.lastCrack) > 0.3 && t - this.lastCrackT > 0.18) {
       this.strike(inp.local, 0.75, t);
+    }
+    // fragmentation: seams keep opening across the surface
+    if (this.fragment > 0.15 && t - this.lastCrackT > 0.55 - this.fragment * 0.4) {
+      this.strike(_dir.randomDirection(), 0.5 + this.fragment * 0.6, t);
     }
     let any = 0;
     for (let i = 0; i < CRACK_N; i++) {

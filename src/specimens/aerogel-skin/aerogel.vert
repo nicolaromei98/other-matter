@@ -25,6 +25,8 @@ vec3 deform(vec3 p, vec3 n) {
   d += exp(-pow(sqrt(dd) - 0.62, 2.0) * 14.0) * 0.028 * pressure;
 
   d += resWave(p, 1.7, 8.0) * 0.06 + uRes * 0.03;
+  // fragmentation: the membrane swells and crumples
+  d += (0.08 + organic(p * 2.3, t * 3.0, 1.0, 0.8) * 0.14) * uFragment;
 
   vec3 q = p + n * d;
   float sl = length(uStretch);

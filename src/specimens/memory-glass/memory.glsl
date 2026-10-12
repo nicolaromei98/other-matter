@@ -27,7 +27,7 @@ float memory(vec3 p, out float ripple) {
 
 // Half the distance between the two cells: they drift apart and back, slowly.
 float cellGap() {
-  return 0.5 + 0.018 * sin(uIdle * 0.23) * uMotion;
+  return 0.5 + 0.018 * sin(uIdle * 0.23) * uMotion + uFragment * 0.26;
 }
 
 // From a point inside a sphere (centre c relative to it, radius r), the
@@ -46,7 +46,10 @@ float smax(float a, float b, float k) {
 // Distance from the centre to the membrane along unit direction n: a soft
 // figure of eight, two spheres around the cells joined at a pinched waist.
 float membrane(vec3 n) {
+  // as the cells part, the membrane stretches into a longer figure of eight
+  // (its two spheres stay overlapping, so the centre is always inside both)
   float g = cellGap();
-  float r = 0.54;
-  return smax(toSphere(n, vec3(-g, 0.0, 0.0), r), toSphere(n, vec3(g, 0.0, 0.0), r), 0.11);
+  float gm = min(g, 0.5);
+  float r = 0.54 + (g - gm) * 0.75;
+  return smax(toSphere(n, vec3(-gm, 0.0, 0.0), r), toSphere(n, vec3(gm, 0.0, 0.0), r), 0.11);
 }

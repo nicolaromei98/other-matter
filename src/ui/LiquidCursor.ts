@@ -58,6 +58,8 @@ export class LiquidCursor {
   private labelW = 0;
   private inked = false;
   private overEl: Element | null = null;
+  /** Driven by another input (the hand tracker): mouse moves are ignored meanwhile. */
+  private driven = false;
   private ch = 6;
   private readonly enabled = matchMedia('(pointer: fine)').matches;
 
@@ -103,7 +105,7 @@ export class LiquidCursor {
     window.addEventListener(
       'pointermove',
       (e) => {
-        if (e.pointerType === 'touch') return;
+        if (e.pointerType === 'touch' || this.driven) return;
         this.at.x = e.clientX;
         this.at.y = e.clientY;
         if (this.show.v === 0) this.appear();
@@ -132,6 +134,19 @@ export class LiquidCursor {
       requestAnimationFrame(() => this.apply());
     });
     gsap.ticker.add(this.frame);
+  }
+
+  /** Follow another input (client px), or give the drop back to the mouse with null. */
+  drive(x: number | null, y = 0): void {
+    if (!this.enabled) return;
+    if (x === null) {
+      this.driven = false;
+      return;
+    }
+    this.driven = true;
+    this.at.x = x;
+    this.at.y = y;
+    if (this.show.v === 0) this.appear();
   }
 
   /** Over a DOM control (a button or link), whether or not a click there does anything right now. */

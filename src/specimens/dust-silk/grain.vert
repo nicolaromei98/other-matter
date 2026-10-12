@@ -6,6 +6,7 @@
 // focal plane grow into soft discs (the fragment shader draws them).
 
 attribute vec3 aNormal;          // the sheet's normal where the grain sits
+attribute vec4 aChunk;           // the fragment it belongs to: outward direction, speed
 attribute vec4 aSeed;            // xyz: dispersal direction, w: size jitter
 attribute vec2 aInfo;            // x: cavity (0 on a crest … 1 deep in a fold), y: kind (0 grain, 1 turquoise, 2 dust)
 
@@ -41,6 +42,9 @@ void main() {
   // dispersion and reconstruction
   vec3 dir = normalize(aSeed.xyz * 2.0 - 1.0 + drift * 0.8);
   p += dir * uDisperse * (0.3 + aSeed.w * 0.9);
+
+  // fragmentation: the mass breaks into chunks that drift apart, each keeping its grains
+  p += aChunk.xyz * uFragment * (0.3 + 0.6 * aChunk.w);
 
   // sound: a compression wave
   float wave = resWave(p, 1.5, 7.0);

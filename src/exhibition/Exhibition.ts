@@ -16,6 +16,8 @@ import { initButton038 } from '../ui/Button038';
 import { liquidButton } from '../ui/LiquidButton';
 import { LiquidNav } from './LiquidNav';
 import { onViewportChange, smallHeight } from '../core/viewport';
+import { HandTracker } from '../core/HandTracker';
+import { HandPanel } from '../ui/HandPanel';
 
 type Mode = 'gallery' | 'grid';
 
@@ -115,6 +117,11 @@ export class Exhibition {
   /** Contextual tag next to the pointer, and the card under it (grid). */
   private readonly cursor: LiquidCursor;
   private cardHover: number | null = null;
+  /** Webcam hand tracking (off until asked for) and its window. */
+  private readonly hands: HandTracker | null;
+  private readonly handPanel: HandPanel | null;
+  private handWas = false;
+  private lastImpact = -10;
   /** Grid scroll response: smoothed page velocity (px/s) and the last scroll position. */
   private scrollVel = 0;
   private lastScrollY = 0;
@@ -143,6 +150,8 @@ export class Exhibition {
     this.mode = params.get('view') === 'gallery' ? 'gallery' : 'grid';
 
     this.cursor = new LiquidCursor(!!engine?.reducedMotion, this.tick);
+    this.hands = engine && 'mediaDevices' in navigator ? new HandTracker() : null;
+    this.handPanel = this.hands ? new HandPanel(this.hands) : null;
     document.fonts?.ready.then(() => initButton038(root));
     liquidButton(qs('.g-inspect', root));
     this.hero = this.buildHero(!!engine?.reducedMotion);
@@ -272,6 +281,27 @@ export class Exhibition {
     soundBtn.addEventListener('click', () => this.sound.toggle());
     this.sound.onChange(renderSound);
 
+    // hand tracking: off until asked for (it needs the camera)
+    const hands = this.hands;
+    if (hands) {
+      const handBtn = qs<HTMLButtonElement>('.om-hand-toggle', this.root);
+      handBtn.hidden = false;
+      const handFlap = new Flap(qs('.om-hand-v', handBtn), 'OFF', { cells: 3, reducedMotion: this.reduced, onLand: this.tick });
+      let back = 0;
+      hands.onStatus((s) => {
+        window.clearTimeout(back);
+        handBtn.setAttribute('aria-pressed', String(s === 'on' || s === 'loading'));
+        if (s === 'denied' || s === 'error') {
+          // no camera (or no permission): say so, then settle back on OFF
+          handFlap.set('N/A');
+          back = window.setTimeout(() => handFlap.set('OFF'), 2400);
+        } else {
+          handFlap.set(s === 'on' ? 'ON' : s === 'loading' ? '···' : 'OFF');
+        }
+      });
+      handBtn.addEventListener('click', () => hands.toggle());
+    }
+
     window.addEventListener('keydown', (e) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const tag = (e.target as HTMLElement).tagName;
@@ -288,6 +318,8 @@ export class Exhibition {
         // V toggles the view
         if (this.mode === 'grid') this.toGallery();
         else this.toGrid();
+      } else if ((e.key === 'h' || e.key === 'H') && this.hands) {
+        this.hands.toggle();
       }
     });
 
@@ -456,6 +488,7 @@ export class Exhibition {
   // ── Per-frame layout ───────────────────────────────────────────────────
 
   private layout(dt: number): void {
+    this.handStep();
     this.nav.layout();
     this.measureAnchors();
     this.scrollResponse(dt);
@@ -508,6 +541,38 @@ export class Exhibition {
       s.squash = clamp(Math.abs(sv) * 0.000045, 0, 0.09);
       s.tilt = clamp(sv * 0.00012, -0.2, 0.2);
     }
+  }
+
+  /**
+   * Hand tracking, each frame: the palm is the pointer (the liquid drop follows
+   * it); a fast pass through the stage specimen is a blow, as hard as the hand
+   * was fast; an open hand breaks the specimen under it apart, the wider the
+   * more; when the hand leaves the frame everything reforms and the mouse has
+   * the pointer back.
+   */
+  private handStep(): void {
+    const t = this.hands;
+    const e = this.engine;
+    if (!t || !e) return;
+    this.handPanel?.frame();
+    const h = t.hand;
+    const on = t.active && h.present;
+    if (on) {
+      e.pointer.drive(h.x, h.y);
+      this.cursor.drive(h.x, h.y);
+      for (const s of this.specimens) s.fragmentTarget = s.interactive ? h.open * s.input.proximity : 0;
+      const target = e.hovered;
+      const now = e.globals.uTime.value;
+      if (target && target.input.hit && h.speed > 1100 && now - this.lastImpact > 0.45) {
+        target.impact(clamp((h.speed - 700) / 2000, 0.3, 1.5));
+        this.lastImpact = now;
+      }
+    } else if (this.handWas) {
+      e.pointer.release();
+      this.cursor.drive(null);
+      for (const s of this.specimens) s.fragmentTarget = 0;
+    }
+    this.handWas = on;
   }
 
   /** What the pointer would do here, said by the liquid cursor (null: nothing to say). */

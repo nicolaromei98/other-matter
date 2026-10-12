@@ -16,6 +16,7 @@ uniform vec3 uResPos;       // where that sound entered (local)
 uniform float uResAge;      // seconds since it entered
 uniform vec2 uScan;         // x: scan line height (local y), y: scan amount
 uniform float uOpacity;     // hand-off to/from the particle transition
+uniform float uFragment;    // 0 whole … 1 broken apart (an open hand)
 
 // A pressure shell travelling outward from where the sound entered.
 float resWave(vec3 p, float speed, float sharp) {

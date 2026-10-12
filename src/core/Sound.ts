@@ -181,7 +181,7 @@ export class Sound {
     const cutoff: Record<Slug, number> = {
       'aerogel-skin': 640,
       'memory-glass': 380,
-      'thermal-foam': 470,
+      'orbital-serum': 560,
       'dust-silk': 720,
       'liquid-stone': 250,
       'bio-lens': 520,
@@ -344,21 +344,17 @@ export class Sound {
         this.hiss(out, t, 0.03, 0.08, 'highpass', 3200, 5000, 0.7, 0.002);
         return 1.6;
       }
-      case 'thermal-foam': {
-        // warmth: a low chord blooming through an opening filter
-        const out = this.bus(0.85 * k, 0.5, pan);
-        const ctx = this.ctx!;
-        const lp = ctx.createBiquadFilter();
-        lp.type = 'lowpass';
-        lp.Q.value = 0.8;
-        lp.frequency.setValueAtTime(280, t);
-        lp.frequency.exponentialRampToValueAtTime(1500, t + 0.35);
-        lp.frequency.exponentialRampToValueAtTime(420, t + 1.4);
-        lp.connect(out);
-        this.tone(lp, 'triangle', 196, t, 0.11, 0.28, 1.2);
-        this.tone(lp, 'triangle', 293.66, t + 0.03, 0.07, 0.3, 1.1);
-        this.tone(lp, 'sine', 392, t + 0.06, 0.04, 0.32, 1.0);
-        return 1.5;
+      case 'orbital-serum': {
+        // glass and serum: a small bright chord, then bubbles rising through the liquid
+        const out = this.bus(0.8 * k, 0.6, pan);
+        this.tone(out, 'sine', 1318.5, t, 0.05, 0.004, 0.9);
+        this.tone(out, 'sine', 1975.5, t + 0.05, 0.03, 0.004, 0.75);
+        this.tone(out, 'triangle', 659.25, t + 0.02, 0.035, 0.01, 1.0);
+        for (let i = 0; i < 5; i++) {
+          const f = 380 + Math.random() * 520;
+          this.tone(out, 'sine', f, t + 0.15 + i * 0.09 + Math.random() * 0.05, 0.03, 0.005, 0.07, f * 2.2);
+        }
+        return 1.2;
       }
       case 'dust-silk': {
         // granular shimmer: tiny high grains scattered across the stereo field

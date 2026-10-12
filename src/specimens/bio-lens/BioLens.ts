@@ -38,8 +38,8 @@ export default class BioLens extends Specimen {
     this.mesh.setRadius(px);
   }
 
-  protected onTap(): void {
-    this.focus.velocity += 4.2;
+  protected onTap(strength = 1): void {
+    this.focus.velocity += 4.2 * strength;
   }
 
   protected step(f: Frame): void {
@@ -57,8 +57,8 @@ export default class BioLens extends Specimen {
     const focus = this.focus.step(inp.pressed ? 0.6 : 0, dt);
     const irisTarget = clamp(this.hover * 0.45 + this.press * 0.3 + this.u.uRes.value * 0.6 + focus * 0.4, 0, 1);
     this.iris.value = damp(this.iris.value, irisTarget, 4, dt);
-    this.coreR.value = 0.42 - this.iris.value * 0.16 + Math.sin(f.idle * 1.1) * 0.012;
-    this.distort.value = damp(this.distort.value, clamp(focus + this.u.uRes.value * 0.8, -0.5, 1.5), 6, dt);
+    this.coreR.value = 0.42 - this.iris.value * 0.16 + this.fragment * 0.14 + Math.sin(f.idle * 1.1) * 0.012;
+    this.distort.value = damp(this.distort.value, clamp(focus + this.u.uRes.value * 0.8 + this.fragment * 0.9, -0.5, 1.5), 6, dt);
 
     // the lens turns subtly toward the cursor
     this.turn.x = damp(this.turn.x, near ? clamp(inp.local.x, -1, 1) : 0, 2, dt);

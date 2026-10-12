@@ -1,4 +1,4 @@
-export type Slug = 'aerogel-skin' | 'memory-glass' | 'thermal-foam' | 'dust-silk' | 'liquid-stone' | 'bio-lens';
+export type Slug = 'aerogel-skin' | 'memory-glass' | 'orbital-serum' | 'dust-silk' | 'liquid-stone' | 'bio-lens';
 
 export interface MaterialEntry {
   slug: Slug;
@@ -62,21 +62,21 @@ export const MATERIALS: MaterialEntry[] = [
     ],
   },
   {
-    slug: 'thermal-foam',
+    slug: 'orbital-serum',
     index: 3,
     code: 'OM — 003',
-    name: 'Thermal Foam',
-    classification: 'Thermo-reactive Volume',
-    short: 'A surface that remembers warmth.',
+    name: 'Orbital Serum',
+    classification: 'Molecular Suspension',
+    short: 'A drop that keeps its molecules in orbit.',
     description:
-      'A liquid-crystalline volume with a blue-silver skin. Warmth from the cursor spreads through it over seconds, shifting its colour, softening its surface tension and inflating it locally.',
-    fallback: ['#eef3fb', '#9fb6d9'],
-    verb: 'WARM',
-    tint: '#f8f9fc',
+      'A drop of green serum in a glass skin, a molecule suspended inside it in a burst of chromatic light. Around it, six glass capsules of pollen are held in a ring by glass bonds, orbiting. Stir it and the ring spins faster; let it go and it opens wide, then draws back in.',
+    fallback: ['#f1f5ea', '#9cbf6e'],
+    verb: 'STIR',
+    tint: '#f6f8f3',
     sheet: [
-      { label: 'RESPONSE', value: '0.4 S', at: [-0.64, 0.52, 0.56] },
-      { label: 'RANGE', value: '18 / 41 C', at: [0.72, 0.3, 0.62] },
-      { label: 'CELL', value: '0.8 MM', at: [0.1, -0.84, 0.52] },
+      { label: 'ORBIT', value: '6 CAPSULES', at: [-0.64, 0.52, 0.56] },
+      { label: 'SUSPENSION', value: '38 PCT', at: [0.72, 0.3, 0.62] },
+      { label: 'BOND', value: '0.2 N', at: [0.1, -0.84, 0.52] },
     ],
   },
   {
