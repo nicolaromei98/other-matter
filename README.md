@@ -200,7 +200,9 @@ flaring fibres, the stress network, or optical-power fringes.
   hand, make a fist, open it over the specimen, leave the frame, swipe through
   it), each moving on only once the gesture has been made.
   - The palm is the interaction point: it drives the pointer (the liquid drop
-    follows it) while a hand is in view; the mouse is ignored meanwhile.
+    follows it) while a hand is in view; the mouse is ignored meanwhile. While
+    tracking is on the drop only marks the palm: the words over the specimens
+    (OPEN, STRETCH…) come back when it is switched off.
   - The hand's speed is the impact: a fast pass through the stage specimen is a
     blow (its own tap action, scaled by the speed).
   - Openness is the fingertips' mean distance from the palm, in palm sizes: 0

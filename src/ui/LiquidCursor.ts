@@ -164,8 +164,9 @@ export class LiquidCursor {
     if (!this.enabled || label === this.label) return;
     this.label = label;
     if (label !== null) {
-      this.ch = (this.text.querySelector('.flap > span') as HTMLElement | null)?.offsetWidth || this.ch;
-      this.labelW = label.length * this.ch;
+      // sub-pixel: a mono cell is ~6.2 px, and rounding it down clipped the last letter
+      this.ch = (this.text.querySelector('.flap > span') as HTMLElement | null)?.getBoundingClientRect().width || this.ch;
+      this.labelW = Math.ceil(label.length * this.ch) + 1;
       gsap.set(this.text, { width: this.labelW });
       this.flap.set(label.padEnd(CELLS, ' '));
     } else {

@@ -502,7 +502,8 @@ export class Exhibition {
     this.nav.layout();
     this.measureAnchors();
     this.scrollResponse(dt);
-    this.cursor.set(this.cursorContext());
+    // with hand tracking on, the drop only marks the palm: no words over the specimens
+    this.cursor.set(this.hands?.active ? null : this.cursorContext());
     this.sheet?.update(this.specimens[this.selected]);
     for (let i = 0; i < this.specimens.length; i++) {
       const s = this.specimens[i];
