@@ -21,6 +21,16 @@ export interface Hand {
   points: { x: number; y: number }[];
 }
 
+/**
+ * Openness from the fingertips' mean distance to the palm, in palm sizes: a
+ * fist is about 0.9, a hand opened without effort about 1.3, fingers spread
+ * as wide as they go 1.7 or more. 0 at FIST, 1 at the hand's own comfortable
+ * opening (see `peak`), never asking for more than OPEN_MAX.
+ */
+const FIST = 0.92;
+const OPEN_MIN = 1.12;
+const OPEN_MAX = 1.32;
+
 /** Wrist and the four knuckles: their mean is the palm's centre. */
 const PALM = [0, 5, 9, 13, 17];
 const TIPS = [4, 8, 12, 16, 20];
@@ -46,6 +56,8 @@ export class HandTracker {
   private running = false;
   private lastSeen = 0;
   private lastT = 0;
+  /** The widest this hand has opened lately (in palm sizes), slowly forgotten. */
+  private peak = 0;
 
   constructor() {
     this.video = document.createElement('video');
@@ -181,8 +193,13 @@ export class HandTracker {
     const size = Math.max(1e-4, dist(lm[0].x, lm[0].y, lm[9].x, lm[9].y));
     let reach = 0;
     for (const i of TIPS) reach += dist(lm[i].x, lm[i].y, px, py) / TIPS.length;
-    const t = Math.min(1, Math.max(0, (reach / size - 0.95) / 0.8));
-    const open = t * t * (3 - 2 * t);
+    // calibrate to this hand: fully open is 90% of its own widest recent opening
+    const ratio = reach / size;
+    this.peak = Math.max(ratio, this.peak - dt * 0.004);
+    const top = Math.min(OPEN_MAX, Math.max(OPEN_MIN, this.peak * 0.9));
+    const t = Math.min(1, Math.max(0, (ratio - FIST) / (top - FIST)));
+    // eased in a little: a hand that has just begun to open already shows it
+    const open = 1 - (1 - t) * (1 - t);
 
     if (!h.present) {
       h.x = sx;

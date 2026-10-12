@@ -203,6 +203,10 @@ flaring fibres, the stress network, or optical-power fringes.
     follows it) while a hand is in view; the mouse is ignored meanwhile.
   - The hand's speed is the impact: a fast pass through the stage specimen is a
     blow (its own tap action, scaled by the speed).
+  - Openness is the fingertips' mean distance from the palm, in palm sizes: 0
+    at a fist, 1 already at a hand opened without effort; it calibrates to the
+    hand, taking 90% of its own widest recent opening as fully open (between
+    1.12 and 1.32 palm sizes), so nobody has to strain their fingers.
   - Opening the hand breaks the specimen under it apart (`Specimen.fragment`,
     `uFragment`). Dust Silk splits into irregular chunks (Voronoi cells of its
     grains), Orbital Serum's ring lets go of its capsules, Memory Glass's cells
