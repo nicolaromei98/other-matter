@@ -13,6 +13,30 @@ const GAP = 0.62; // gap between neighbouring beads
 const NECK = 0.04; // droplet overlap with its bead (the neck)
 const AFTER = 0.32; // extra room between a droplet and the neighbouring bead
 
+/**
+ * Springs for the drag, as [angular frequency (rad/s), damping ratio]: under 1
+ * they overshoot a little and settle, which is what makes it read as liquid.
+ * With reduced motion every damping ratio becomes 1 (no overshoot).
+ */
+const FOLLOW: [number, number] = [14, 0.6]; // the liquid following the pointer
+const SWELL: [number, number] = [11, 0.5]; // the swell moving into a bead: a small plop
+const HEAD: [number, number] = [14, 0.62]; // droplet heads
+const TAIL: [number, number] = [8.5, 0.48]; // droplet tails, trailing and wobbling
+const REACH: [number, number] = [15, 0.55]; // a bridge forming and letting go
+const BAND: [number, number] = [11, 0.38]; // the rubber band past either end
+const GROW: [number, number] = [16, 0.7]; // droplets regrowing
+const SINK: [number, number] = [24, 0.9]; // a droplet sinking out of the way during a hand-off
+/** A hand-off lasts this long (s): the bridge is held while the other droplet takes it over. */
+const HANDOFF = 0.18;
+/** Past the midpoint by this much (in beads) before the swell moves on, so it does not flicker there. */
+const HYST = 0.08;
+
+/** One step of a damped spring (semi-implicit Euler): returns [position, velocity]. */
+function spring(x: number, v: number, to: number, [w, z]: [number, number], h: number): [number, number] {
+  v += (-w * w * (x - to) - 2 * z * w * v) * h;
+  return [x + v * h, v];
+}
+
 /** One of the two droplets on the active bead: "next" on the right, "previous" on the left. */
 export interface Droplet {
   /** +1 right of the bead, -1 left of it. */
@@ -41,14 +65,17 @@ export interface Droplet {
  * one-hot target (so an interrupted move simply continues from where it is),
  * turned into geometry here once per frame.
  *
- * The row can also be dragged. While scrubbing, the swell stays on the bead
- * nearest the pointer and the droplet on the pointer's side reaches out
- * toward the neighbouring bead, further the further the pointer goes, until
- * at the midpoint it touches it and the two are bridged; past the midpoint the
- * swell flows into the neighbour and the bridge holds from its other side,
- * like surface tension handing the liquid on. Past either end of the row the
- * droplet is pulled out like a rubber band. On release everything settles
- * into the chosen bead with a little give.
+ * The row can also be dragged, and then springs drive it, so it moves like a
+ * liquid with mass: it follows the pointer a touch behind and overshoots a
+ * little when the pointer stops. The swell stays on the bead nearest the
+ * liquid and the droplet on that side reaches toward the neighbouring bead,
+ * further the further it goes, until past the midpoint the two are bridged
+ * and the swell flows over with a small plop. The bridge is handed over, not
+ * broken: the droplet holding it keeps it a moment while the other droplet
+ * sinks out of the old bead and wells up inside the bridge from the new one's
+ * side, then lets go and flows through the new bead to its far side. Moving fast, the droplets stretch ahead and trail behind. Past
+ * either end of the row the droplet is pulled out like a rubber band. On
+ * release the same springs carry it into the chosen bead and let it settle.
  *
  * Geometry is in screen CSS px. It drives the DOM hit areas here and the WebGL
  * rendering in GooeySlider.
@@ -66,9 +93,29 @@ export class LiquidNav {
   private readonly radii: number[];
   private rs = 17;
   private current = -1;
-  /** Dragging: the pointer's position along the row (fractional bead index). */
+  /** The pointer is down on the row. */
   private scrubbing = false;
+  /** Springs own the weights: while dragging, and while settling after it. */
+  private driving = false;
+  /** The pointer along the row (fractional bead index), and the liquid's own position following it. */
   private scrubF = 0;
+  private fs = 0;
+  private fv = 0;
+  /** The liquid's velocity smoothed for the droplets' lean (beads/s); not reset when grabbed again. */
+  private lean = 0;
+  /** The bead the springs pull the swell into. */
+  private target = 0;
+  /** A hand-off in progress: time left, the bead the bridge holds from, and which way the swell moved (0: none). */
+  private handoff = 0;
+  private handFrom = 0;
+  private handDir: 1 | -1 | 0 = 0;
+  /** Spring velocities of everything the drag drives. */
+  private readonly sizeV: number[];
+  private readonly leadV: number[][];
+  private readonly lagV: number[][];
+  private readonly scaleV = [0, 0];
+  private readonly reachV = [0, 0];
+  private overV = 0;
   /** Per droplet: how far it reaches toward the neighbouring bead on its side (0…1), and which bead that is. */
   private readonly reach = [{ v: 0 }, { v: 0 }];
   private readonly reachTo = [-1, -1];
@@ -102,6 +149,9 @@ export class LiquidNav {
     this.size = weights();
     this.hover = weights();
     this.radii = dots.map(() => 0);
+    this.sizeV = dots.map(() => 0);
+    this.leadV = [dots.map(() => 0), dots.map(() => 0)];
+    this.lagV = [dots.map(() => 0), dots.map(() => 0)];
 
     dots.forEach((d, i) => {
       d.addEventListener('pointerenter', () => gsap.to(this.hover[i], { v: 1, duration: 0.45, ease: 'power2.out', overwrite: true }));
@@ -133,15 +183,30 @@ export class LiquidNav {
     return n > 1 ? Math.max(1, (this.beads[n - 1].x - this.beads[0].x) / (n - 1)) : 1;
   }
 
-  /** Start dragging along the row, from the active bead. */
+  /** Start dragging along the row, from the active bead (or from where it is still settling). */
   beginScrub(): void {
+    if (!this.driving) {
+      // from rest: the liquid starts where the row shows it
+      this.fs = this.target = this.active;
+      this.fv = 0;
+      this.zeroVelocities();
+    } else {
+      // grabbed again while it settles: it carries on from the bead it is flowing into
+      this.fs = this.target;
+      this.fv = 0;
+    }
+    this.handDir = 0;
+    this.handoff = 0;
     this.scrubbing = true;
-    this.scrubF = Math.max(0, this.current);
+    this.driving = true;
+    this.scrubF = this.fs;
     gsap.killTweensOf([...this.size, this.over, ...this.reach]);
     this.drops.forEach((d, idx) => {
+      // still finishing a sink from an earlier grab: leave it to finish
+      if (this.sinking[idx]) return;
       // a droplet whose hop has not reached its swap yet (still on its old bead) never slides
       // across the row: if it is already sunk it moves to the drag's bead at once, otherwise it
-      // finishes sinking first; the drag regrows it either way
+      // finishes sinking first; the springs regrow it either way
       const midHop = !!d.hop && d.hop.time() < 0.22;
       const t = d.hop ? d.hop.time() : 1;
       d.hop?.kill();
@@ -150,7 +215,7 @@ export class LiquidNav {
       this.sinking[idx] = false;
       if (!midHop) return;
       if (d.scale.v <= 0.01) {
-        this.oneHot(d, this.active);
+        this.oneHot(d, this.target);
         return;
       }
       this.sinking[idx] = true;
@@ -159,7 +224,8 @@ export class LiquidNav {
         duration: Math.max(0.05, 0.22 - t),
         ease: 'power2.in',
         onComplete: () => {
-          this.oneHot(d, Math.round(Math.min(this.beads.length - 1, Math.max(0, this.scrubF))));
+          this.oneHot(d, this.target);
+          this.scaleV[idx] = 0;
           this.sinking[idx] = false;
         },
       });
@@ -172,103 +238,201 @@ export class LiquidNav {
     d.lag.forEach((w, j) => (w.v = j === i ? 1 : 0));
   }
 
+  private zeroVelocities(): void {
+    this.sizeV.fill(0);
+    this.leadV.forEach((v) => v.fill(0));
+    this.lagV.forEach((v) => v.fill(0));
+    this.scaleV.fill(0);
+    this.reachV.fill(0);
+    this.overV = 0;
+  }
+
   /** The pointer's position along the row, as a fractional bead index (may run past either end). */
   scrub(f: number): void {
     this.scrubF = f;
   }
 
-  /** Let go: everything flows into bead `i` (the tails catch up with a little give). */
+  /** Let go: the springs carry everything into bead `i` and let it settle there. */
   endScrub(i: number): void {
     if (!this.scrubbing) return;
     this.scrubbing = false;
-    this.current = i;
-    const give = this.reduced ? 'power3.out' : 'elastic.out(1, 0.5)';
-    const back = this.reduced ? 'power3.out' : 'elastic.out(1, 0.45)';
-    const to = (w: { v: number }[], duration: number, ease: string, delay = 0) =>
-      w.forEach((x, j) => gsap.to(x, { v: j === i ? 1 : 0, duration, ease, delay, overwrite: true }));
-    to(this.size, 0.5, 'power3.out');
-    this.drops.forEach((d, idx) => {
-      if (this.sinking[idx]) {
-        // still sinking into its old bead: finish sinking, then well up from the chosen one
-        this.sinking[idx] = false;
-        gsap.to(d.scale, {
-          v: 0,
-          duration: Math.max(0.05, d.scale.v * 0.2),
-          ease: 'power2.in',
-          overwrite: true,
-          onComplete: () => {
-            this.oneHot(d, i);
-            gsap.to(d.scale, { v: 1, duration: 0.5, ease: 'power3.out' });
-          },
-        });
-        return;
-      }
-      // the droplets flow into the chosen bead, their tails catching up with a little give
-      to(d.lead, 0.45, 'power3.out');
-      to(d.lag, 0.85, give, 0.04);
-      gsap.to(d.scale, { v: 1, duration: 0.3, ease: 'power2.out', overwrite: true });
-    });
-    // a bridge in progress lets go and springs back
-    gsap.to(this.reach, { v: 0, duration: 0.7, ease: back, overwrite: true });
-    gsap.to(this.over, { v: 0, duration: 0.7, ease: back, overwrite: true });
+    this.current = this.target = i;
+    // a hand-off in progress completes on its own; the springs then carry it into `i`
   }
 
-  /** While dragging: the swell and the droplets' heads at the pointer, the tails trailing it. */
-  private applyScrub(dt: number): void {
-    const n = this.beads.length;
-    const fc = Math.min(n - 1, Math.max(0, this.scrubF));
-    // past either end the row gives like a rubber band, more reluctantly the further it goes
-    const past = this.scrubF - fc;
-    const over = Math.sign(past) * this.spacing() * 0.55 * (1 - Math.exp(-Math.abs(past) * 1.4));
-    // eased, so grabbing it again while it springs back does not pop
-    this.over.v += (over - this.over.v) * (1 - Math.exp(-dt / 0.05));
+  /** The springs stop where they are (an instant selection takes over). */
+  private stopDrive(): void {
+    this.scrubbing = false;
+    this.driving = false;
+    this.handDir = 0;
+    this.handoff = 0;
+    this.sinking.fill(false);
+    for (const d of this.drops) gsap.killTweensOf(d.scale);
+    gsap.killTweensOf([this.over, ...this.reach]);
+    this.over.v = 0;
+    this.reach.forEach((r) => (r.v = 0));
+    this.fv = 0;
+    this.zeroVelocities();
+  }
 
-    // the bead nearest the pointer holds the swell; the pointer's offset from it (−0.5…0.5)
-    const near = Math.round(fc);
-    const off = fc - near;
-    const toward = (w: { v: number }[], tau: number) => {
-      const k = 1 - Math.exp(-dt / tau);
-      w.forEach((o, j) => (o.v += ((j === near ? 1 : 0) - o.v) * k));
-    };
-    // the swell and the droplets flow quickly to a new nearest bead, the tails a little behind
-    toward(this.size, 0.07);
+  /** Per frame while the springs drive: substeps at 120 Hz, so they stay stable on slow frames. */
+  private drive(dt: number): void {
+    const steps = Math.max(1, Math.ceil(dt * 120));
+    for (let k = 0; k < steps; k++) this.driveStep(dt / steps);
+    if (!this.scrubbing && this.atRest()) this.park();
+  }
+
+  private driveStep(h: number): void {
+    const n = this.beads.length;
+    const damp = (sp: [number, number]): [number, number] => (this.reduced ? [sp[0], 1] : sp);
+    let off = 0;
+    if (this.scrubbing) {
+      // the liquid follows the pointer on a spring: a touch behind, a little past when it stops
+      [this.fs, this.fv] = spring(this.fs, this.fv, this.scrubF, damp(FOLLOW), h);
+      const fc = Math.min(n - 1, Math.max(0, this.fs));
+      const before = this.target;
+      while (fc - this.target > 0.5 + HYST && this.target < n - 1) this.target++;
+      while (fc - this.target < -0.5 - HYST && this.target > 0) this.target--;
+      if (this.target !== before) {
+        // the swell moves on: hand the bridge over (from the bead next to the new one)
+        this.handDir = this.target > before ? 1 : -1;
+        this.handFrom = this.target - this.handDir;
+        this.handoff = HANDOFF;
+      }
+      off = fc - this.target;
+    } else {
+      this.fv *= Math.exp(-h * 10);
+    }
+    this.lean += (this.fv - this.lean) * (1 - Math.exp(-h / 0.06));
+
+    // the swell flows into its bead (and overshoots it a little: a plop)
+    this.size.forEach((w, j) => ([w.v, this.sizeV[j]] = spring(w.v, this.sizeV[j], j === this.target ? 1 : 0, damp(SWELL), h)));
+    // a hand-off: the droplet on the side the swell moved holds the bridge from the old bead,
+    // the other one sinks into the old bead out of sight
+    const handing = this.handDir !== 0;
     this.drops.forEach((d, idx) => {
       if (this.sinking[idx]) return;
-      toward(d.lead, 0.06);
-      toward(d.lag, 0.13);
-      d.scale.v += (1 - d.scale.v) * (1 - Math.exp(-dt / 0.08));
-      // the droplet on the pointer's side reaches toward the neighbour: touching it at the midpoint
-      const t = d.side * off > 0 ? Math.min(1, Math.abs(off) / 0.5) : 0;
-      let want = 1 - (1 - t) * (1 - t);
+      const holder = handing && d.side === this.handDir;
+      const sinker = handing && d.side === -this.handDir;
+      const home = handing ? this.handFrom : this.target;
+      const lv = this.leadV[idx];
+      const gv = this.lagV[idx];
+      // once let go the droplets settle near-critically: an overshoot that scales with the
+      // distance travelled would fling them off the row after a long flick (the swell keeps its plop)
+      const head: [number, number] = this.scrubbing ? HEAD : [HEAD[0], 0.9];
+      const tail: [number, number] = this.scrubbing ? TAIL : [TAIL[0], 0.9];
+      d.lead.forEach((w, j) => ([w.v, lv[j]] = spring(w.v, lv[j], j === home ? 1 : 0, damp(head), h)));
+      d.lag.forEach((w, j) => ([w.v, gv[j]] = spring(w.v, gv[j], j === home ? 1 : 0, damp(tail), h)));
+      [d.scale.v, this.scaleV[idx]] = spring(d.scale.v, this.scaleV[idx], sinker ? 0 : 1, damp(sinker ? SINK : GROW), h);
+
       const r = this.reach[idx];
-      const to = near + d.side;
-      if (want > 0 && to !== this.reachTo[idx]) {
-        // a new bead to reach for: let go of the old one first (no jump), unless barely reaching
-        // (by size: the spring-back after a release swings below zero)
-        if (Math.abs(r.v) > 0.05) want = 0;
-        else this.reachTo[idx] = to;
+      let want = 0;
+      if (holder) {
+        // keep the bridge from the old bead to the new one (letting go of a different one
+        // first, so a crossing that comes while it still reaches does not make it jump a bead)
+        const to = this.handFrom + d.side;
+        if (to !== this.reachTo[idx] && Math.abs(r.v) > 0.05) want = 0;
+        else {
+          this.reachTo[idx] = to;
+          want = 1;
+        }
+      } else if (!sinker && this.scrubbing && d.side * off > 0) {
+        // the droplet on the liquid's side reaches toward the neighbour: touching it at the midpoint
+        const t = Math.min(1, Math.abs(off) / 0.5);
+        want = 1 - (1 - t) * (1 - t);
+        const to = this.target + d.side;
+        if (to !== this.reachTo[idx]) {
+          // a new bead to reach for: let go of the old one first (no jump), unless barely reaching
+          if (Math.abs(r.v) > 0.05) want = 0;
+          else this.reachTo[idx] = to;
+        }
       }
       // (a droplet letting go keeps the bead it was reaching for, so it retracts the way it came)
-      r.v += (want - r.v) * (1 - Math.exp(-dt / 0.045));
+      [r.v, this.reachV[idx]] = spring(r.v, this.reachV[idx], want, damp(REACH), h);
     });
+
+    if (handing) {
+      this.handoff -= h;
+      if (this.handoff <= 0) {
+        // the sunk droplet wells up inside the bridge from the new bead's side, already reaching
+        // back to the old bead; the holder lets go and flows on through the new bead
+        const idx = this.drops.findIndex((d) => d.side === -this.handDir);
+        const d = this.drops[idx];
+        this.oneHot(d, this.target);
+        this.leadV[idx].fill(0);
+        this.lagV[idx].fill(0);
+        this.reachTo[idx] = this.target + d.side;
+        // reaching back only if the holder really spans that gap (else it would appear from nowhere)
+        const other = 1 - idx;
+        const back = this.scrubbing && d.side * off > 0 && this.reachTo[other] === this.target && this.reach[other].v > 0.9;
+        this.reach[idx].v = back ? 1 : 0;
+        this.reachV[idx] = 0;
+        this.handDir = 0;
+      }
+    }
+
+    // past either end the row gives like a rubber band, more reluctantly the further it goes
+    let over = 0;
+    if (this.scrubbing) {
+      const past = this.fs - Math.min(n - 1, Math.max(0, this.fs));
+      over = Math.sign(past) * this.spacing() * 0.55 * (1 - Math.exp(-Math.abs(past) * 1.4));
+    }
+    [this.over.v, this.overV] = spring(this.over.v, this.overV, over, damp(BAND), h);
+    // its springy overshoot stays within reach of the row
+    const cap = this.spacing() * 0.65;
+    if (Math.abs(this.over.v) > cap) {
+      this.over.v = Math.sign(this.over.v) * cap;
+      this.overV = 0;
+    }
+  }
+
+  /** Settled after a release: everything is at its target and still. */
+  private atRest(): boolean {
+    const e = 2e-3;
+    const still = (x: number, to: number, v: number) => Math.abs(x - to) < e && Math.abs(v) < e * 10;
+    if (this.handDir !== 0 || this.sinking.some(Boolean) || !still(this.over.v, 0, this.overV)) return false;
+    for (let j = 0; j < this.size.length; j++) if (!still(this.size[j].v, j === this.target ? 1 : 0, this.sizeV[j])) return false;
+    return this.drops.every(
+      (d, idx) =>
+        still(d.scale.v, 1, this.scaleV[idx]) &&
+        still(this.reach[idx].v, 0, this.reachV[idx]) &&
+        d.lead.every((w, j) => still(w.v, j === this.target ? 1 : 0, this.leadV[idx][j])) &&
+        d.lag.every((w, j) => still(w.v, j === this.target ? 1 : 0, this.lagV[idx][j])),
+    );
+  }
+
+  /** Hand the row back to the tweened selections, exactly one-hot. */
+  private park(): void {
+    this.driving = false;
+    this.handDir = 0;
+    this.lean = 0;
+    this.current = this.target;
+    this.size.forEach((w, j) => (w.v = j === this.target ? 1 : 0));
+    for (const d of this.drops) {
+      this.oneHot(d, this.target);
+      d.scale.v = 1;
+    }
+    this.reach.forEach((r) => (r.v = 0));
+    this.over.v = 0;
+    this.fv = 0;
+    this.zeroVelocities();
   }
 
   /** Make bead `i` the active one; the droplet on that side flows there. */
   select(i: number, instant = false): void {
-    if (this.scrubbing) {
-      // a queued transition catching up with the bead the row already shows: the drag goes on
-      if (i === this.current && !instant) return;
-      // any other selection (keys, a tap, a view change) ends the drag: settle into it
-      if (!instant) {
+    if (this.driving && !instant) {
+      if (this.scrubbing) {
+        // a queued transition catching up with the bead the row already shows: the drag goes on
+        if (i === this.current) return;
+        // any other selection (keys, a tap, a view change) ends the drag: settle into it
         this.endScrub(i);
         return;
       }
-      this.scrubbing = false;
-      this.sinking.fill(false);
-      gsap.killTweensOf([this.over, ...this.reach]);
-      this.over.v = 0;
-      this.reach.forEach((r) => (r.v = 0));
+      // still settling after a drag: the springs simply carry it on to the new bead
+      this.current = this.target = i;
+      return;
     }
+    if (this.driving) this.stopDrive();
     if (i === this.current && !instant) return;
     const from = this.current;
     this.current = i;
@@ -318,7 +482,7 @@ export class LiquidNav {
     const now = performance.now();
     const dt = Math.min(0.05, Math.max(0.001, (now - this.lastT) / 1000));
     this.lastT = now;
-    if (this.scrubbing) this.applyScrub(dt);
+    if (this.driving) this.drive(dt);
 
     const p = this.pill.getBoundingClientRect();
     const cx = p.left + p.width / 2;
@@ -332,15 +496,18 @@ export class LiquidNav {
     const n = this.beads.length;
 
     // reflow: each bead takes its diameter, the active one also room for a droplet on each side
+    // (the swell's plop may undershoot below 0: the room gets a soft floor, with no kink at 0,
+    // so it never pinches a bead's neighbours together until they fuse)
+    const roomOf = (v: number) => (v >= 0 ? v : -0.04 * (1 - Math.exp(v / 0.04)));
     let w = gap * (n - 1);
     for (let i = 0; i < n; i++) {
       this.radii[i] = rs * (1 + (ACTIVE - 1) * this.size[i].v);
-      w += 2 * this.radii[i] + 2 * tailW * this.size[i].v;
+      w += 2 * this.radii[i] + 2 * tailW * roomOf(this.size[i].v);
     }
     let x = cx - w / 2;
     for (let i = 0; i < n; i++) {
       const r = this.radii[i];
-      const room = tailW * this.size[i].v;
+      const room = tailW * roomOf(this.size[i].v);
       const b = this.beads[i];
       b.x = x + room + r;
       b.y = cy;
@@ -380,9 +547,10 @@ export class LiquidNav {
       settled = Math.min(settled, Math.max(l, 1 - l), Math.max(t, 1 - t));
     }
     // dragging: reaching toward the neighbouring bead, the head overlapping its edge at full reach
-    const reach = this.reach[idx].v;
+    // (the spring may swing it a little past either way; never backwards out of the bead)
+    const reach = Math.min(1.15, Math.max(0, this.reach[idx].v));
     const j = this.reachTo[idx];
-    if (Math.abs(reach) > 1e-3 && j >= 0 && j < this.beads.length) {
+    if (reach > 1e-3 && j >= 0 && j < this.beads.length) {
       const b = this.beads[j];
       // the head reaches over; the tail stays anchored at the bead the bridge starts from
       // (not wherever its weights are flowing), so the liquid holds as one body when the swell flips
@@ -391,7 +559,7 @@ export class LiquidNav {
       const a = j - d.side;
       if (a >= 0 && a < this.beads.length) {
         const seatA = this.beads[a].x + d.side * (this.radii[a] + out);
-        tx += (seatA + (touch - seatA) * 0.06 - tx) * Math.min(1, Math.abs(reach));
+        tx += (seatA + (touch - seatA) * 0.06 - tx) * Math.min(1, reach);
       }
     }
     // dragged past the end of the row: the droplet on that side is pulled out
@@ -399,9 +567,20 @@ export class LiquidNav {
       hx += this.over.v;
       tx += this.over.v * 0.1;
     }
+    // moving fast: the droplet ahead stretches forward, the one behind trails its tail
+    if (this.driving && this.lean !== 0) {
+      let lean = Math.max(-rd * 0.9, Math.min(rd * 0.9, this.lean * this.spacing() * 0.035));
+      if (this.over.v * lean > 0) lean = 0;
+      if (lean * d.side > 0) {
+        hx += lean;
+        tx += lean * 0.3;
+      } else {
+        tx -= lean * 0.4;
+      }
+    }
     const stretch = Math.min(1, Math.abs(hx - tx) / (this.rs * 4));
     Object.assign(d.head, { x: hx, y: cy, r: rd * s * (1 - 0.18 * stretch) });
     Object.assign(d.tail, { x: tx, y: cy, r: rd * s * (1 - 0.3 * stretch) });
-    d.icon = Math.pow(settled, 12) * (1 - stretch) * s * s * (1 - Math.min(1, Math.abs(reach) * 3));
+    d.icon = Math.min(1, Math.pow(Math.min(1, settled), 12) * (1 - stretch) * s * s * (1 - Math.min(1, Math.abs(this.reach[idx].v) * 3)));
   }
 }

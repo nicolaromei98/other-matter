@@ -431,6 +431,8 @@ export class Exhibition {
           /* already released */
         }
         this.nav.beginScrub();
+        // the speed is measured from here on (the travel before the threshold is not a sample)
+        drag.f = drag.f0 + dx / drag.spacing;
       }
       const f = drag.f0 + dx / drag.spacing;
       // velocity, blended by time (not by event count) and never over less than a frame
@@ -465,8 +467,8 @@ export class Exhibition {
       }
       // a flick carries it on by its momentum (at most one bead); held still before letting go, none
       const idle = e.timeStamp - d.t;
-      const v = idle > 80 ? 0 : d.v * Math.exp(-idle / 60);
-      const i = clamp(Math.round(d.f + clamp(v * 0.12, -1, 1)), 0, n - 1);
+      const v = idle > 100 ? 0 : d.v * Math.exp(-idle / 90);
+      const i = clamp(Math.round(d.f + clamp(v * 0.16, -1, 1)), 0, n - 1);
       this.nav.endScrub(i);
       // select() plays the transition (or queues it behind one still running)
       this.select(i);

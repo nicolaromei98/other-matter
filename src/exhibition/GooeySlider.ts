@@ -120,7 +120,12 @@ export class GooeySlider {
     this.mesh.visible = vis > 0.01 && box.w > 0;
     if (!this.mesh.visible) return;
     const u = this.mat.uniforms;
-    const hw = box.w / 2 + PAD;
+    // wide enough for the droplets wherever the drag's springs put them (past the row's ends too)
+    let ext = box.w / 2;
+    for (const d of drops) {
+      ext = Math.max(ext, Math.abs(d.head.x - box.x) + d.head.r, Math.abs(d.tail.x - box.x) + d.tail.r);
+    }
+    const hw = ext + PAD;
     const hh = box.h / 2 + PAD;
     u.uVis.value = vis;
     u.uQuad.value.set(hw, hh);
