@@ -33,6 +33,7 @@ export class Diagnostics {
     const info = this.engine.renderer.info.render;
     const ms = (this.acc / this.frames) * 1000;
     const visible = this.engine.specimens.filter((s) => s.group.visible).length;
+    const pacing = this.engine.pacing;
     this.el.textContent = [
       `fps    ${(this.frames / this.acc).toFixed(0)}`,
       `frame  ${ms.toFixed(1)} ms  (worst ${(this.worst * 1000).toFixed(1)})`,
@@ -40,6 +41,7 @@ export class Diagnostics {
       `tris   ${info.triangles.toLocaleString('en-GB')}`,
       `points ${info.points.toLocaleString('en-GB')}`,
       `dpr    ${this.engine.pixelRatio.toFixed(2)}  tier ${this.engine.tier}`,
+      `pace   ${pacing.cadence.toFixed(1)}/${pacing.refresh.toFixed(1)} ms  ${pacing.every === 2 ? 'half' : 'full'}  late ${(pacing.late * 100).toFixed(0)}%`,
       `live   ${visible}/6`,
     ].join('\n');
     this.acc = 0;

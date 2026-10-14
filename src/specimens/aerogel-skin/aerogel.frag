@@ -44,14 +44,25 @@ void main() {
   vec3 acc = vec3(0.0);
   float trans = 1.0;
   float contour = 0.0;
+  // the domain warp and the hue change slowly along the ray: sampled at its first
+  // and last steps and blended between (12 noise evaluations a pixel instead of 24)
+  vec3 p0 = pos + rd * STEP_LEN;
+  vec3 p1 = pos + rd * STEP_LEN * float(STEPS);
+  vec3 q0 = p0 * 1.3;
+  vec3 q1 = p1 * 1.3;
+  vec2 w0 = vec2(snoise(q0 + vec3(t, 0.0, 0.0)), snoise(q0 + vec3(0.0, 4.1, -t)));
+  vec2 w1 = vec2(snoise(q1 + vec3(t, 0.0, 0.0)), snoise(q1 + vec3(0.0, 4.1, -t)));
+  float h0 = snoise(p0 * 0.75 + vec3(3.0, t * 0.8, 1.0));
+  float h1 = snoise(p1 * 0.75 + vec3(3.0, t * 0.8, 1.0));
   for (int i = 0; i < STEPS; i++) {
     pos += rd * STEP_LEN;
+    float u = float(i) / float(STEPS - 1);
     float inside = smoothstep(1.08, 0.5, length(pos));
     vec3 q = pos * 1.3;
-    vec2 w = vec2(snoise(q + vec3(t, 0.0, 0.0)), snoise(q + vec3(0.0, 4.1, -t)));
+    vec2 w = mix(w0, w1, u);
     float dens = snoise(q * 1.15 + vec3(w * 0.95, t * 1.4));
     dens = sat(dens * 0.75 + 0.32 + uRes * 0.25 + uHover * 0.06) * inside;
-    float hue = 0.5 + 0.5 * snoise(pos * 0.75 + vec3(3.0, t * 0.8, 1.0)) + uIdle * 0.01;
+    float hue = 0.5 + 0.5 * mix(h0, h1, u) + uIdle * 0.01;
     acc += trans * dens * pastel(hue) * STEP_LEN * 2.5;
     trans *= exp(-dens * STEP_LEN * 2.3);
     contour += (1.0 - smoothstep(0.0, 0.08, abs(fract(dens * 5.0) - 0.5) - 0.42)) * inside / float(STEPS);

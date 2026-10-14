@@ -829,6 +829,8 @@ export class Exhibition {
     this.applyInteractivity();
 
     // Grid is laid out now: prepare cards hidden, they appear as specimens land.
+    gsap.killTweensOf(qs('.grid', this.root));
+    gsap.set(qs('.grid', this.root), { clearProps: 'opacity,visibility' });
     this.cardEls.forEach((c) => this.collapseCard(c, true));
     const scrollTarget = this.scrollToCard(this.selected, MOVE);
     const card = this.ellipseEls[this.selected].getBoundingClientRect();
@@ -923,6 +925,8 @@ export class Exhibition {
 
     const order = this.rankFrom(this.selected);
     this.cardEls.forEach((c, i) => this.collapseCard(c, false, order[i] * 0.04));
+    // the whole grid fades too: every card label (masked or not, in view or scrolled past) is gone at once
+    gsap.to(qs('.grid', this.root), { autoAlpha: 0, duration: 0.3, ease: 'power2.in', overwrite: true });
 
     this.specimens.forEach((s, i) => {
       gsap.killTweensOf([s, this.fx[i]]);
@@ -965,6 +969,7 @@ export class Exhibition {
       if (token !== this.modeToken) return;
       this.root.classList.remove('is-transitioning');
       this.cardEls.forEach((c) => this.resetCard(c));
+      gsap.set(qs('.grid', this.root), { clearProps: 'opacity,visibility' });
       this.measureGallery();
     });
   }

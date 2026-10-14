@@ -16,14 +16,22 @@ void main() {
 const _clear = new THREE.Color();
 /** Room around the row for swelling beads and the droplet's stretch. */
 const PAD = 24;
-/** Thumbnails refreshed per frame (round robin): each one updates every third frame, ~20 fps. */
-const PER_FRAME = 2;
+/** At most this many thumbnails are rendered in one frame. */
+const MAX_PER_FRAME = 3;
+
+/** How often each thumbnail refreshes (fps): the active (swelling) porthole the most. */
+export interface ThumbRates {
+  idle: number;
+  active: number;
+}
 
 /**
  * Renders the liquid slider (see LiquidNav for the motion). Every specimen is
  * rendered on its own, by a small camera, with MSAA, then copied into one cell
  * of a thumbnail atlas; the gooey shader draws the black liquid and shows the
- * thumbnails through each bead's porthole.
+ * thumbnails through each bead's porthole. Each thumbnail refreshes on its own
+ * clock, faster the more its bead is swollen (the active one, or the one a drag
+ * is flowing into), the most overdue first.
  */
 export class GooeySlider {
   /** Global visibility, tweened with the gallery navigation. */
@@ -46,8 +54,9 @@ export class GooeySlider {
   private readonly tails = [new THREE.Vector3(), new THREE.Vector3()];
   private readonly icons = [1, 1];
   private res = 64;
-  /** Next thumbnail to refresh (round robin). */
-  private next = 0;
+  /** When each thumbnail is next due (s, on the slider's own clock). */
+  private readonly due = Array.from({ length: 6 }, () => 0);
+  private clock = 0;
   /** Thumbnails to draw at once on the next frame (all of them after a resize). */
   private stale = 6;
 
@@ -55,6 +64,7 @@ export class GooeySlider {
     private readonly engine: Engine,
     private readonly specimens: Specimen[],
     private readonly nav: LiquidNav,
+    private readonly rates: ThumbRates = { idle: 15, active: 60 },
   ) {
     this.cam.position.set(0, 0, 1.15 / Math.sin(THREE.MathUtils.degToRad(8)));
     this.cam.lookAt(0, 0, 0);
@@ -140,9 +150,18 @@ export class GooeySlider {
     });
   }
 
-  private render = (): void => {
+  private render = (dt: number): void => {
     this.update();
     if (!this.mesh.visible) return;
+    this.clock += dt;
+    // the thumbnails due now, most overdue first (all of them after a resize)
+    const n = this.specimens.length;
+    const order: number[] = [];
+    for (let i = 0; i < n; i++) if (this.stale > 0 || this.due[i] <= this.clock) order.push(i);
+    if (order.length === 0) return;
+    order.sort((a, b) => this.due[a] - this.due[b]);
+    const count = this.stale > 0 ? n : Math.min(MAX_PER_FRAME, order.length);
+    this.stale = 0;
     const e = this.engine;
     const r = e.renderer;
     const prev = r.getRenderTarget();
@@ -152,11 +171,10 @@ export class GooeySlider {
     const res = this.res;
     this.region.min.set(0, 0);
     this.region.max.set(res, res);
-    const count = Math.max(PER_FRAME, this.stale);
-    this.stale = 0;
     for (let k = 0; k < count; k++) {
-      const i = this.next;
-      this.next = (this.next + 1) % this.specimens.length;
+      const i = order[k];
+      const swell = Math.min(1, Math.max(0, this.nav.beads[i].swell));
+      this.due[i] = this.clock + 1 / (this.rates.idle + (this.rates.active - this.rates.idle) * swell);
       const s = this.specimens[i];
       const g = s.group;
       const restore = e.isolate(g);

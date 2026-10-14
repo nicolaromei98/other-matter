@@ -3,6 +3,7 @@ import Lenis from 'lenis';
 import { largeHeight, onViewportChange } from './viewport';
 import gsap from 'gsap';
 import { Pointer } from './Pointer';
+import { Pacer } from './Pacer';
 import { damp } from './math';
 import type { Frame, Tier } from './types';
 import type { Specimen } from '../specimens/Specimen';
@@ -62,14 +63,14 @@ export class Engine {
 
   width = 0;
   height = 0;
-  private dpr: number;
-  private readonly dprMin: number;
-  private frameAvg = 1 / 60;
-  private slowTime = 0;
+  /** Resolution applied to the renderer; the pacer decides it (see Pacer). */
+  private dpr = 1;
+  private readonly pacer: Pacer;
+  private lastRaf = 0;
+  /** A refresh measurement running (see measureRefresh()): nothing is drawn meanwhile. */
+  private measuring = 0;
   /** Set when the viewport really changed (see viewport.ts): toolbars sliding in and out don't count. */
   private sizeDirty = true;
-  /** Seconds before slow frames count: loading, warm-up and intro first, then a moment after the tab returns. */
-  private adaptHold = 4;
   private lastFrame = 0;
   private time = 0;
   private idle = 0;
@@ -114,10 +115,12 @@ export class Engine {
 
     // The canvas carries the slider's liquid edges and icons and the specimens'
     // silhouettes, right next to crisp DOM text: render at the screen's own
-    // density (up to 2x) and let adapt() step down only if frames stay slow.
-    const cap = opts.tier === 'high' ? 2 : 1.25;
-    this.dpr = Math.min(window.devicePixelRatio || 1, cap);
-    this.dprMin = opts.tier === 'high' ? 1 : 0.75;
+    // density (up to 2x); the pacer trades some of it away while frames stutter.
+    this.pacer = new Pacer(opts.tier === 'high');
+    this.pacer.fit(window.devicePixelRatio);
+    // loading, warm-up and intro first: slow frames then say nothing about the GPU
+    this.pacer.hold(4);
+    this.dpr = this.pacer.dpr;
 
     this.lenis = opts.reducedMotion ? null : new Lenis({ autoRaf: false, lerp: 0.1, smoothWheel: true, wheelMultiplier: 0.9 });
 
@@ -127,9 +130,11 @@ export class Engine {
     });
     canvas.addEventListener('webglcontextrestored', () => (this.lost = false));
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) this.adaptHold = Math.max(this.adaptHold, 1.5);
+      if (!document.hidden) this.pacer.hold(1.5);
     });
     onViewportChange(() => (this.sizeDirty = true));
+    this.watchScreen();
+    this.measureRefresh();
     this.resize();
     if (!this.pointer.fine) this.listenTilt();
   }
@@ -162,6 +167,12 @@ export class Engine {
 
   get pixelRatio(): number {
     return this.dpr;
+  }
+
+  /** Pacing as it stands (diagnostics): refresh and cadence in ms, every refresh or every other, share of late frames. */
+  get pacing(): { refresh: number; cadence: number; every: 1 | 2; late: number } {
+    const { refresh, cadence, every, late } = this.pacer;
+    return { refresh, cadence, every, late };
   }
 
   add(s: Specimen): void {
@@ -221,29 +232,56 @@ export class Engine {
   }
 
   /**
-   * Degrade resolution when frames stay below ~50 fps for about two seconds of
-   * drawing; never oscillates back up. Stalls (shader compiles, texture uploads,
-   * tab switches, GC) say nothing about fill rate and are skipped, and so is
-   * everything during adaptHold: a few hitches must not halve the resolution
-   * for the rest of the visit.
+   * The window moved to another screen (or the page zoom changed): a new
+   * density, and maybe a new refresh rate (a 120 Hz laptop panel, a 60 Hz
+   * monitor). Pacing starts over from the top there.
    */
-  private adapt(elapsedMs: number, dt: number): void {
-    if (this.adaptHold > 0) {
-      this.adaptHold -= dt;
-      return;
-    }
-    if (elapsedMs > 100) return;
-    this.frameAvg += (elapsedMs / 1000 - this.frameAvg) * 0.08;
-    if (this.frameAvg > 1 / 50) this.slowTime += dt;
-    else this.slowTime = Math.max(0, this.slowTime - dt * 0.5);
-    // phones step down sooner: there a missed frame shows as a stutter in the scroll
-    if (this.slowTime > (this.tier === 'high' ? 2 : 1) && this.dpr > this.dprMin) {
-      this.dpr = Math.max(this.dprMin, this.dpr - 0.25);
-      this.renderer.setPixelRatio(this.dpr);
-      this.renderer.setSize(this.width, this.height, true);
-      this.slowTime = 0;
-      this.frameAvg = 1 / 60;
-    }
+  private watchScreen(): void {
+    const query = matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+    const moved = () => {
+      query.removeEventListener('change', moved);
+      this.watchScreen();
+      this.pacer.fit(window.devicePixelRatio);
+      this.applyDpr();
+      this.measureRefresh();
+    };
+    query.addEventListener('change', moved);
+  }
+
+  /**
+   * Measures the display's refresh interval on some 24 animation frames that
+   * draw nothing: first while the loader is up, then after a move to another
+   * screen, where a few held frames go unnoticed.
+   */
+  private measureRefresh(): void {
+    const id = ++this.measuring;
+    const gaps: number[] = [];
+    let last = -1;
+    let frames = 0;
+    const step = (t: number) => {
+      if (id !== this.measuring) return;
+      const gap = t - last;
+      if (last >= 0 && gap > 4 && gap < 40) gaps.push(gap);
+      last = t;
+      if (gaps.length < 24 && ++frames < 90) {
+        requestAnimationFrame(step);
+        return;
+      }
+      this.measuring = 0;
+      if (gaps.length >= 8) {
+        gaps.sort((a, b) => a - b);
+        this.pacer.setRefresh(gaps[Math.floor(gaps.length * 0.25)]);
+      }
+    };
+    requestAnimationFrame(step);
+  }
+
+  /** The pacer's resolution onto the renderer (reallocates the canvas: a hitch of a frame or two). */
+  private applyDpr(): void {
+    if (this.pacer.dpr === this.dpr) return;
+    this.dpr = this.pacer.dpr;
+    this.renderer.setPixelRatio(this.dpr);
+    this.renderer.setSize(this.width, this.height, true);
   }
 
   /** Light field: the cursor gently turns the studio environment. */
@@ -294,11 +332,17 @@ export class Engine {
   }
 
   private tick = (): void => {
-    // At most one frame per ~10.5 ms: 120/144 Hz screens draw every other
-    // refresh (60/72 fps, half the GPU work), 60 and 90 Hz draw every one.
     const now = performance.now();
+    // measuring the display's refresh: nothing drawn, the time picks up from here
+    if (this.measuring) {
+      this.lastRaf = this.lastFrame = now;
+      return;
+    }
+    this.pacer.raf(now - this.lastRaf);
+    this.lastRaf = now;
     const elapsed = now - this.lastFrame;
-    if (elapsed < 10.5) return;
+    // every refresh, or every other one when the pacer asks for a steady half rate
+    if (this.pacer.skip(elapsed)) return;
     this.lastFrame = now;
     const dt = Math.min(1 / 20, Math.max(1 / 1000, elapsed / 1000));
     this.time += dt;
@@ -327,6 +371,7 @@ export class Engine {
     }
     this.onAfterRender?.(dt);
     this.pointer.endFrame(dt);
-    this.adapt(elapsed, dt);
+    this.pacer.frame(elapsed, dt);
+    this.applyDpr();
   };
 }

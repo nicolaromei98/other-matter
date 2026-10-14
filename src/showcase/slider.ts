@@ -2,6 +2,7 @@ import '@fontsource-variable/manrope';
 import '../styles/fonts.css';
 import '../styles/base.css';
 
+import gsap from 'gsap';
 import { Engine } from '../core/Engine';
 import { MATERIALS } from '../data/materials';
 import { SPECIMENS } from '../specimens/registry';
@@ -57,7 +58,8 @@ async function boot() {
   const next = pill.querySelector('.g-next') as HTMLButtonElement;
   const prev = pill.querySelector('.g-prev') as HTMLButtonElement;
   const nav = new LiquidNav(pill, dots, next, prev, reducedMotion);
-  const slider = new GooeySlider(engine, specimens, nav);
+  // the thumbnails are the subject here: all of them stay fluid
+  const slider = new GooeySlider(engine, specimens, nav, { idle: 30, active: 60 });
   slider.visibility.value = 1;
   nav.select(0, true);
 
@@ -87,7 +89,7 @@ async function boot() {
   window.addEventListener('resize', measure);
   document.fonts?.ready.then(measure);
 
-  if (import.meta.env.DEV) Object.assign(window, { __showcase: { engine, nav, slider } });
+  if (import.meta.env.DEV) Object.assign(window, { __showcase: { engine, nav, slider, gsap } });
   engine.onLayout = () => nav.layout();
   await engine.prepare();
   engine.start();
