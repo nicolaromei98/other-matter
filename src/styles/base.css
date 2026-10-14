@@ -828,6 +828,8 @@ button {
   position: relative;
   width: calc(var(--bead-a) * 6.64);
   height: var(--bead-a);
+  /* dragged sideways by the slider itself; the page may still scroll vertically, and zoom */
+  touch-action: pan-y pinch-zoom;
 }
 
 .g-dots {

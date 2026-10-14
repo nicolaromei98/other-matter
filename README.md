@@ -294,6 +294,22 @@ context suspends while the page is hidden.
     other droplet sinks into the old bead and wells up from the new one, while
     the row reflows as beads swell and shrink. Everything is weights tweened toward the
     target, so a move interrupted mid-way just continues from where it is.
+  - It can be dragged (`LiquidNav` scrub, `Exhibition.bindScrub`). Past 6 px of
+    sideways travel (12 on touch) a press on it becomes a drag. The swell stays
+    on the bead nearest the pointer, and the droplet on the pointer's side
+    reaches toward the neighbouring bead until, at the midpoint, it touches it
+    and the two are bridged. Past the midpoint the swell flows into the
+    neighbour and the bridge holds from its other side. Past either end the
+    droplet is pulled out like a rubber band. The code above the title previews
+    the specimen it would land on, ticking at each bead. On release it settles
+    on the nearest bead with a little give; a flick carries it one further,
+    while holding still before letting go carries it none. Only then does the
+    stage change. A press that does not travel stays a click.
+    - Anything else that chooses mid-drag takes over cleanly: keys, a queued
+      transition, the view switch or Inspect.
+    - A touch the browser takes over (pointercancel), or a lost release
+      (window blur), settles back without choosing.
+    - The gallery swipe ignores the slider and stops at either end.
   - It is one signed distance field in WebGL: circles plus a tapered capsule,
     joined with a smooth minimum (`gooey.frag`). Proportions are in `LiquidNav.ts`;
     the size comes from `--bead-a` in CSS. Without WebGL, CSS draws plain beads.
