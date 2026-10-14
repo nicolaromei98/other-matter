@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>Other Matter — Slider</title>
+    <!--
+      Local showcase for screen recordings: only the gallery's liquid slider, large,
+      on a clean page. Served by the dev server at /slider.html; not part of the
+      production build (vite.config.ts builds index.html only).
+      ?zoom=1.4 scales it, ?bg=f2f2f2 sets the background, ?cursor=0 shows the system cursor.
+    -->
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: var(--bg);
+      }
+      .showcase {
+        position: relative;
+        z-index: 20;
+        display: grid;
+        place-items: center;
+        /* the viewport, not 100%: the engine's Lenis sets html and body to height: auto */
+        height: 100vh;
+        height: 100dvh;
+      }
+      .showcase .g-nav {
+        --bead-a: calc(min(11vw, 22vh) * var(--zoom, 1));
+        /* the site places it in the gallery's grid; here it simply sits in the middle */
+        grid-area: auto;
+        padding: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="showcase">
+      <nav class="g-nav" aria-label="Specimens">
+        <div class="g-pill">
+          <div class="g-dots"></div>
+          <button class="g-prev" type="button" aria-label="Previous specimen"></button>
+          <button class="g-next" type="button" aria-label="Next specimen"></button>
+        </div>
+      </nav>
+    </main>
+    <canvas class="gl" aria-hidden="true"></canvas>
+    <script type="module" src="/src/showcase/slider.ts"></script>
+  </body>
+</html>

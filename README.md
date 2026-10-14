@@ -16,6 +16,14 @@ year-long immutable caching for the hashed files in `/assets`.
 The site opens on the Grid. State lives in the URL (`?view=gallery&specimen=bio-lens`)
 and is written with `history.replaceState`, never as navigation.
 
+`/slider.html` (dev server only, not in the build) is a showcase for screen
+recordings: the gallery's liquid slider on its own, large, centred on a clean
+page. It has the same live thumbnails, drag, clicks and arrows as the site
+(`src/showcase/slider.ts`). Options:
+- `?zoom=1.4` scales it;
+- `?bg=f2f2f2` sets the background;
+- `?cursor=0` shows the system cursor instead of the liquid one.
+
 ---
 
 ## Architecture
@@ -56,6 +64,7 @@ src/
   exhibition/transmute/   gallery transition: Transmutation (live copies + composite), transmute.frag
   exhibition/LiquidNav.ts  liquid slider: bead layout, droplet motion, hit areas, index label
   exhibition/GooeySlider.ts liquid slider rendering + live thumbnail atlas (gooey.frag)
+  exhibition/SliderDrag.ts  the slider's drag (shared by the gallery and /slider.html)
   exhibition/Atmosphere.ts the room: contact shadows, vignette around the pointer, grain (atmosphere.frag)
   exhibition/InspectSheet.ts Inspect: readings pinned to the specimen's surface
   ui/Flap.ts               split-flap text, used across the interface

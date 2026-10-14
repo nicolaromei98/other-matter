@@ -15,6 +15,7 @@ import { LiquidCursor } from '../ui/LiquidCursor';
 import { initButton038 } from '../ui/Button038';
 import { liquidButton } from '../ui/LiquidButton';
 import { LiquidNav } from './LiquidNav';
+import { bindSliderDrag } from './SliderDrag';
 import { onViewportChange, smallHeight } from '../core/viewport';
 import { HandTracker } from '../core/HandTracker';
 import { HandPanel } from '../ui/HandPanel';
@@ -95,8 +96,6 @@ export class Exhibition {
   private textToken = 0;
   private wasOver: boolean[] = MATERIALS.map(() => false);
   private swipe: { x: number; y: number; on: boolean; id: number } = { x: 0, y: 0, on: false, id: -1 };
-  /** When the last slider drag ended (ms): the click that follows a drag is swallowed. */
-  private scrubEnd = -1e9;
   /** Surface transmutation between gallery specimens (null → spatial fallback without WebGL). */
   private readonly morph: Transmutation | null;
   /** Specimens held on the stage regardless of selection (outgoing, mid-transition). */
@@ -175,6 +174,8 @@ export class Exhibition {
     this.applyInteractivity();
     this.measureGallery();
     this.nav = new LiquidNav(this.pillEl, this.dotEls, qs('.g-next', root), qs('.g-prev', root), !!engine?.reducedMotion);
+    // (after the nav exists: the drag holds on to it)
+    this.bindScrub();
     this.nav.select(this.selected, true);
     this.nav.layout();
     this.measureAnchors();
@@ -361,7 +362,6 @@ export class Exhibition {
       }
     });
 
-    this.bindScrub();
 
     const onResize = () => {
       this.measureGallery();
@@ -374,123 +374,22 @@ export class Exhibition {
   }
 
   /**
-   * The slider can be dragged. Past a few px of horizontal travel a press on it
-   * becomes a scrub: the liquid follows the pointer live (LiquidNav.scrub), the
-   * code above the title previews the specimen it would land on and ticks at
-   * each bead; on release it settles on the nearest bead (a flick carries it
-   * one further) and only then does the specimen on the stage change. A press
-   * that does not travel stays a click on a bead or an arrow.
+   * The slider can be dragged (SliderDrag): the code above the title previews
+   * the specimen it would land on and ticks at each bead; on release the stage
+   * changes. It only chooses in the gallery, outside Inspect, and the code
+   * always ends on the specimen on the stage (its title is the one showing).
    */
   private bindScrub(): void {
-    const pill = this.pillEl;
-    const n = MATERIALS.length;
-    let drag: { id: number; x0: number; f0: number; spacing: number; on: boolean; near: number; f: number; v: number; t: number } | null = null;
-    // the code always ends on the specimen on the stage (its title is the one showing)
-    const settleCode = () => this.codeFlap.set(MATERIALS[this.selected].code);
-
-    // a drag that stops without choosing: the row settles back where it started
-    const abort = () => {
-      const d = drag;
-      drag = null;
-      if (!d?.on) return;
-      this.scrubEnd = performance.now();
-      try {
-        pill.releasePointerCapture(d.id);
-      } catch {
-        /* not captured */
-      }
-      if (this.nav.isScrubbing) this.nav.endScrub(d.f0);
-      settleCode();
-    };
-    // a drag only chooses in the gallery, outside Inspect
-    const live = () => this.mode === 'gallery' && !this.inspecting;
-
-    pill.addEventListener('pointerdown', (e) => {
-      // one drag at a time: a second finger (or the mouse during a touch drag) does not take it over
-      if (drag || !live() || e.button !== 0) return;
-      drag = { id: e.pointerId, x0: e.clientX, f0: 0, spacing: 1, on: false, near: 0, f: 0, v: 0, t: e.timeStamp };
-    });
-    window.addEventListener('pointermove', (e) => {
-      if (!drag || e.pointerId !== drag.id) return;
-      // the button came up somewhere we did not hear about (focus loss, a system gesture): release here
-      if (e.pointerType === 'mouse' && e.buttons === 0) return end(e);
-      // the view changed, Inspect opened, or something else chose meanwhile: the drag is over
-      if (!live() || (drag.on && !this.nav.isScrubbing)) return abort();
-      const dx = e.clientX - drag.x0;
-      if (!drag.on) {
-        // fingers wobble: a tap on a bead or an arrow must stay a tap
-        if (Math.abs(dx) < (e.pointerType === 'touch' ? 12 : 6)) return;
-        drag.on = true;
-        // from the bead the row shows now (it runs ahead of the stage while a transition plays)
-        drag.f0 = drag.f = drag.near = this.nav.active;
-        drag.spacing = this.nav.spacing();
-        drag.t = e.timeStamp;
-        try {
-          pill.setPointerCapture(e.pointerId);
-        } catch {
-          /* already released */
-        }
-        this.nav.beginScrub();
-        // the speed is measured from here on (the travel before the threshold is not a sample)
-        drag.f = drag.f0 + dx / drag.spacing;
-      }
-      const f = drag.f0 + dx / drag.spacing;
-      // velocity, blended by time (not by event count) and never over less than a frame
-      const dt = Math.max(0.008, (e.timeStamp - drag.t) / 1000);
-      const k = 1 - Math.exp(-dt / 0.05);
-      drag.v += ((f - drag.f) / dt - drag.v) * k;
-      drag.f = f;
-      drag.t = e.timeStamp;
-      this.nav.scrub(f);
-      const near = clamp(Math.round(f), 0, n - 1);
-      if (near !== drag.near) {
-        drag.near = near;
-        this.codeFlap.set(MATERIALS[near].code);
+    bindSliderDrag(this.pillEl, this.nav, MATERIALS.length, {
+      live: () => this.mode === 'gallery' && !this.inspecting,
+      preview: (i) => {
+        this.codeFlap.set(MATERIALS[i].code);
         this.tick();
-      }
-    });
-    const end = (e: PointerEvent) => {
-      if (!drag || e.pointerId !== drag.id) return;
-      if (!drag.on) {
-        drag = null;
-        return;
-      }
-      // the view changed or Inspect opened while held: settle back, choose nothing
-      if (!live()) return abort();
-      const d = drag;
-      drag = null;
-      this.scrubEnd = performance.now();
-      if (!this.nav.isScrubbing) {
-        // taken over by another selection while held: that choice stands
-        settleCode();
-        return;
-      }
-      // a flick carries it on by its momentum (at most one bead); held still before letting go, none
-      const idle = e.timeStamp - d.t;
-      const v = idle > 100 ? 0 : d.v * Math.exp(-idle / 90);
-      const i = clamp(Math.round(d.f + clamp(v * 0.16, -1, 1)), 0, n - 1);
-      this.nav.endScrub(i);
-      // select() plays the transition (or queues it behind one still running)
-      this.select(i);
-      settleCode();
-    };
-    window.addEventListener('pointerup', end);
-    // the browser took the touch over (to scroll): not a choice
-    window.addEventListener('pointercancel', (e) => {
-      if (drag && e.pointerId === drag.id) abort();
-    });
-    window.addEventListener('blur', abort);
-    // the click a drag's release may produce (it follows the pointerup at once) is not a choice
-    pill.addEventListener(
-      'click',
-      (e) => {
-        if (performance.now() - this.scrubEnd < 120) {
-          e.stopPropagation();
-          e.preventDefault();
-        }
       },
-      true,
-    );
+      // select() plays the transition (or queues it behind one still running)
+      choose: (i) => this.select(i),
+      settle: () => this.codeFlap.set(MATERIALS[this.selected].code),
+    });
   }
 
   private syncSwitch(): void {
